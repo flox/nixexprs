@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+# genProjectsJson: Generate project-to-attribute mappings in JSON
+#
+# This script is invoked with each update to the nixexprs repository in
+# order to update the top-level projects.json file used by flox to
+# identify which expressions are built from which project. Invoke with:
+#
+# % ./genProjectsJson
+#
+# Failing attributes won't be included in the result,
+# but the error they throw will be shown on stderr
+
+prevErr=$(mktemp)
+err=$(mktemp)
+trap '{ rm "$prevErr" "$err"; }' EXIT
+
+prevFilterSet=
+filterSet="{}"
+
+# The prefix the Nix evaluation should use for tracing of failed attribute paths
+# such that we can parse the failed path from the error trace
+# Note: This needs to be regex-friendly and not be ambiguous with other Nix traces
+tracePrefix="genProjectsJson failed while evaluating attribute "
+
+nixEval() {
+  nix-instantiate genProjectsJson.nix 2>"$err" \
+    --eval --strict --json --show-trace \
+    --argstr tracePrefix "$tracePrefix" \
+    --argstr filterSetJson "$filterSet"
+}
+
+while ! nixEval; do
+
+  if [[ -n "$prevFilterSet" ]] && diff "$prevErr" "$err" >/dev/null; then
+    echo "Stderr output for the Nix evaluation didn't change even though the filter set was changed from $prevFilterSet to $filterSet" >&2
+    echo "This is likely a bug in genProjectsJson.nix" >&2
+    exit 1
+  fi
+
+  # Get the last error trace line of the form we expect and extract the failing attribute path from it
+  failedAttrPath=$(sed -n 's/'"$tracePrefix"'\(.*\)/\1/p' "$err" | tail -1)
+
+  if [[ -z "$failedAttrPath" || "$failedAttrPath" == "[]" ]]; then
+    echo "Evaluation of genProjectsJson.nix itself failed:" >&2
+    cat "$err" >&2
+    exit 1
+  fi
+
+  prettyFailedAttrPath=$(jq -r 'join(".")' <<< "$failedAttrPath")
+
+  prevFilterSet=$filterSet
+  # Modifies the filterSet to have a `true` entry for the failed attribute path,
+  # therefore filtering it out for the next evaluation
+  filterSet=$(jq -c --argjson path "$failedAttrPath" '. * setpath($path; true)' <<< "$filterSet")
+
+  if [[ "$prevFilterSet" == "$filterSet" ]]; then
+    echo "Evaluation of $prettyFailedAttrPath failed again, even though this failure should have been filtered out from the previous evaluation" >&2
+    echo "This is likely a bug in genProjectsJson.nix" >&2
+    exit 1
+  fi
+
+  echo "Evaluation of $prettyFailedAttrPath failed:" >&2
+  cat "$err" >&2
+  echo "" >&2
+
+  # Swap err and prevErr files
+  tmp="$prevErr"
+  prevErr="$err"
+  err="$tmp"
+
+done

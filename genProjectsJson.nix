@@ -1,25 +1,17 @@
-#
-# genProjectsJson.nix: generate project-to-attribute mappings in JSON
-#
-# This script is invoked with each update to the nixexprs repository in
-# order to update the top-level projects.json file used by flox to
-# identify which expressions are built from which project. Invoke with:
-#
-# % nix-instantiate -E --eval --strict "import ./genProjectsJson.nix { channel_json = ./path/to/channel.json; }" | jq -r . | jq .
-#
-# Souvik Sen, Michael Brantley
-# Fri Aug  9 15:49:39 EDT 2019
-#
-
-{ lib ? import <nixpkgs/lib>
-, channel_json
+# See ./genProjectsJson for usage
+{ filterSetJson
+, tracePrefix
 }:
-
 let
-  channel = ./.;
-  attributes = import channel {
-    inherit channel_json;
-  };
+  lib = import <nixpkgs/lib>;
+
+  collectEntries = set: filterSet: attrPath:
+    let
+      shouldRecurse = lib.isAttrs set && ! lib.isDerivation set && ! set ? project && set.recurseForDerivations or true;
+
+      subResult = map (attr:
+        collectEntries set.${attr} (filterSet.${attr} or false) (attrPath ++ [ attr ])
+      ) (lib.attrNames set);
 
   # Generate attrName/projectName tuples for top-level packages
   # containing "project" attribute.
@@ -45,21 +37,14 @@ let
         projectName = attributes.${namespace}.${x}.project;
       }) pkglist;
 
-  # Use above function to compute mapping of sub-namespace packages
-  # containing "project" attribute.
-  nested_mappings = map (x: genMapping x) [
-    "perlPackages"
-    "python2Packages"
-    "python3Packages"
-  ];
+      # Outputs the attribute path that's being evaluated to stderr
+      # (when --show-trace) with a known format such that we can detect it and
+      # filter it out in a next evaluation
+      withErrorContext = builtins.addErrorContext "${tracePrefix}${builtins.toJSON attrPath}";
 
-in
-  # Print JSON output using the foldAttrs() method to merge the
-  # projectName->attrName tuples rendered by map().
-  builtins.toJSON (
-    lib.attrsets.foldAttrs (n: a: [n] ++ a) [] (
-      map (x: {
-        ${x.projectName} = x.attrName;
-      }) ( lib.lists.flatten(nested_mappings) ++ top_level_mappings )
-    )
-  )
+      result =
+        if filterSet == true then {}
+        else lib.zipAttrsWith (name: lib.concatLists) (lib.optionals shouldRecurse subResult ++ ownResult);
+    in withErrorContext result;
+
+in collectEntries (import ./. {}) (builtins.fromJSON filterSetJson) []
