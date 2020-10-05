@@ -6,17 +6,22 @@
 # order to update the top-level projects.json file used by flox to
 # identify which expressions are built from which project. Invoke with:
 #
-# % ./genProjectsJson
+# % ./genProjectsJson | jq '.projects'
 #
-# Failing attributes won't be included in the result,
-# but the error they throw will be shown on stderr
+# Failing attributes along with their errors are included in the `failures` key:
+#
+# % ./genProjectsJson | jq '.failures'
 
 prevErr=$(mktemp)
 err=$(mktemp)
-trap '{ rm "$prevErr" "$err"; }' EXIT
 
-prevFilterSet=
-filterSet="{}"
+prevErrorSet=$(mktemp)
+errorSet=$(mktemp)
+
+trap '{ rm "$prevErr" "$err" "$prevErrorSet" "$errorSet"; }' EXIT
+
+echo "{}" > "$errorSet"
+prettyFailedAttrPath=
 
 # The prefix the Nix evaluation should use for tracing of failed attribute paths
 # such that we can parse the failed path from the error trace
@@ -27,13 +32,13 @@ nixEval() {
   nix-instantiate genProjectsJson.nix 2>"$err" \
     --eval --strict --json --show-trace \
     --argstr tracePrefix "$tracePrefix" \
-    --argstr filterSetJson "$filterSet"
+    --argstr errorSetJson "$errorSet"
 }
 
-while ! nixEval; do
+while ! projects=$(nixEval); do
 
-  if [[ -n "$prevFilterSet" ]] && diff "$prevErr" "$err" >/dev/null; then
-    echo "Stderr output for the Nix evaluation didn't change even though the filter set was changed from $prevFilterSet to $filterSet" >&2
+  if [[ -n "$prettyFailedAttrPath" ]] && diff "$prevErr" "$err" >/dev/null; then
+    echo "Stderr output for the Nix evaluation didn't change even though the error set was changed to include $prettyFailedAttrPath" >&2
     echo "This is likely a bug in genProjectsJson.nix" >&2
     exit 1
   fi
@@ -49,16 +54,21 @@ while ! nixEval; do
 
   prettyFailedAttrPath=$(jq -r 'join(".")' <<< "$failedAttrPath")
 
-  prevFilterSet=$filterSet
-  # Modifies the filterSet to have a `true` entry for the failed attribute path,
-  # therefore filtering it out for the next evaluation
-  filterSet=$(jq -c --argjson path "$failedAttrPath" '. * setpath($path; true)' <<< "$filterSet")
-
-  if [[ "$prevFilterSet" == "$filterSet" ]]; then
+  if jq -e --argjson path "$failedAttrPath" 'getpath($path)' "$errorSet" >/dev/null; then
     echo "Evaluation of $prettyFailedAttrPath failed again, even though this failure should have been filtered out from the previous evaluation" >&2
-    echo "This is likely a bug in genProjectsJson.nix" >&2
+    echo "This is likely a bug in genProjectsJson.nix:" >&2
+    cat "$err" >&2
     exit 1
   fi
+
+  # Modifies the errorSet to have an error entry for the failed attribute path,
+  # therefore filtering it out for the next evaluation
+  cp "$errorSet" "$prevErrorSet"
+  jq -c \
+    --arg error "$(cat "$err")" \
+    --argjson path "$failedAttrPath" \
+    '. * setpath($path; $error)' \
+    "$prevErrorSet" > "$errorSet"
 
   echo "Evaluation of $prettyFailedAttrPath failed:" >&2
   cat "$err" >&2
@@ -70,3 +80,8 @@ while ! nixEval; do
   err="$tmp"
 
 done
+
+jq -n \
+  --argjson projects "$projects" \
+  --slurpfile failures "$errorSet" \
+  '{ failures : $failures[0], projects : $projects }'

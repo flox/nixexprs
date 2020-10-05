@@ -1,16 +1,16 @@
-# See ./genProjectsJson for usage
-{ filterSetJson
+# Use ./genProjectsJson for evaluating this
+{ errorSetJson
 , tracePrefix
 }:
 let
   lib = import <nixpkgs/lib>;
 
-  collectEntries = set: filterSet: attrPath:
+  collectEntries = set: errorSet: attrPath:
     let
       shouldRecurse = lib.isAttrs set && ! lib.isDerivation set && ! set ? project && set.recurseForDerivations or true;
 
       subResult = map (attr:
-        collectEntries set.${attr} (filterSet.${attr} or false) (attrPath ++ [ attr ])
+        collectEntries set.${attr} (errorSet.${attr} or null) (attrPath ++ [ attr ])
       ) (lib.attrNames set);
 
   # Generate attrName/projectName tuples for top-level packages
@@ -43,8 +43,8 @@ let
       withErrorContext = builtins.addErrorContext "${tracePrefix}${builtins.toJSON attrPath}";
 
       result =
-        if filterSet == true then {}
+        if lib.isString errorSet then {}
         else lib.zipAttrsWith (name: lib.concatLists) (lib.optionals shouldRecurse subResult ++ ownResult);
     in withErrorContext result;
 
-in collectEntries (import ./. {}) (builtins.fromJSON filterSetJson) []
+in collectEntries (import ./. {}) (lib.importJSON errorSetJson) []
