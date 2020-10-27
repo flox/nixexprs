@@ -11,8 +11,15 @@
     , inputChannels ? []
     , channelConfig ? {}
     , outputOverlays ? []
-    }@channelArguments:
+    }:
   let
+
+    # Propagating arguments like this, because just using `@channelArguments`
+    # above would not propagate defaults
+    channelArguments = {
+      inherit name nixpkgsOverlays inputChannels channelConfig outputOverlays;
+    };
+
     # We only import nixpkgs once with an overlay that adds all channels, which is
     # also used as a base set for all channels themselves
     pkgs = import <nixpkgs> {};
@@ -20,7 +27,8 @@
 
     lookupNixPath = path:
       let
-        entry = lib.findFirst (e: lib.hasPrefix e.prefix path) (throw "No entry matching ${toString path} found in NIX_PATH") builtins.nixPath;
+        entry = lib.findFirst (e: lib.hasPrefix e.prefix path)
+          (throw "No entry matching ${toString path} found in NIX_PATH") builtins.nixPath;
         suffix = lib.removePrefix entry.prefix path;
       in entry.path + suffix;
 

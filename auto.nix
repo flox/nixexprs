@@ -22,17 +22,22 @@ in {
           ${pythonPackages} = super.${pythonPackages}
             # The callPackage within this package set should have the correct default python version
             # So instead of just using self directly, we use self with the channel config adjusted to what we need
-            // { callPackage = super.lib.callPackageWith (self.flox.withChannelConfig { defaultPythonVersion = version; }); }
-            // genPackageDirAttrs dir self super self.${pythonPackages}.callPackage;
+            // genPackageDirAttrs dir self super
+              (super.lib.callPackageWith (self.flox.withChannelConfig { defaultPythonVersion = version; }));
         };
     in autoPythonPackages 2 // autoPythonPackages 3 // {
-      python = self."python${toString self.flox.channelConfig.defaultPythonVersion}";
-      pythonPackages = self."python${toString self.flox.channelConfig.defaultPythonVersion}Packages";
+      python = if self.flox.channelConfig ? defaultPythonVersion
+        then self."python${toString self.flox.channelConfig.defaultPythonVersion}"
+        else throw "Trying to access `python`, but no default python version has been defined for channel ${self.flox.channelName} or the channel it gets imported from";
+      pythonPackages = if self.flox.channelConfig ? defaultPythonVersion
+        then self."python${toString self.flox.channelConfig.defaultPythonVersion}Packages"
+        else throw "Trying to access `pythonPackages`, but no default python version has been defined for channel ${self.flox.channelName} or the channel it gets imported from";
     };
 
   perl = dir: self: super: {
     perlPackages = super.perlPackages
-      // { callPackage = super.lib.callPackageWith self; }
-      // genPackageDirAttrs dir self super self.perlPackages.callPackage;
+      // genPackageDirAttrs dir self super (super.lib.callPackageWith self);
   };
+
+  pkgs = dir: self: super: genPackageDirAttrs dir self super self.callPackage;
 }
