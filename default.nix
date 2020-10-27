@@ -1,17 +1,19 @@
 # Things that can get passed via --arg/--argstr
-{ debugVerbosity ? 0
-, srcpath ? ""
-, manifest_json ? ""
-, manifest ? ""
-}@args:
 {
   channel =
+    # Arguments for the channel file in nixexprs
     { name
     , nixpkgsOverlays ? []
     , inputChannels ? []
     , channelConfig ? {}
     , outputOverlays ? []
     }:
+    # Arguments for the command line
+    { debugVerbosity ? 0
+    , srcpath ? ""
+    , manifest_json ? ""
+    , manifest ? ""
+    }@args:
   let
 
     # Propagating arguments like this, because just using `@channelArguments`
