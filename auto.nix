@@ -7,7 +7,7 @@ let
       inherit (super) lib;
       # TODO: Warn or error or do something else for non-directories?
       subdirs = lib.attrNames (lib.filterAttrs (name: type: type == "directory") (builtins.readDir dir));
-      subdirPackage = name: self.flox.withVerbosity 4
+      subdirPackage = name: self.flox.utils.withVerbosity 4
         (builtins.trace "Auto-calling ${toString (dir + "/${name}")}")
         (callPackage (dir + "/${name}") {});
     in lib.genAttrs subdirs subdirPackage;

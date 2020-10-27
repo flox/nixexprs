@@ -1,15 +1,12 @@
 self: {
 
-  utils = {
-    removePathDups = self.makeSetupHook {} ./setup-hooks/removePathDups.sh;
-  };
-
   source = {
     setVersion = self.callPackage ./floxSetSrcVersion.nix { };
   };
 
   # flox custom builders & stuff (in future).
   builders = {
+    removePathDups = self.makeSetupHook {} ./setup-hooks/removePathDups.sh;
     mkDerivation = self.callPackage ./mkDerivation.nix { };
     buildGoPackage = self.callPackage ./buildGoPackage.nix { };
     # Will deprecate buildGoPackage when everyone migrates to Go modules.
