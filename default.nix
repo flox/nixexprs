@@ -11,7 +11,7 @@
     , inputChannels ? []
     , channelConfig ? {}
     , outputOverlays ? []
-    }:
+    }@channelArguments:
   let
     pkgs = import <nixpkgs> {};
     inherit (pkgs) lib;
@@ -48,8 +48,8 @@
     # Get the list of channels from <$currentChannel-meta>/channels.json
 
 
-    # Imports the channel from a source, adding extra attributes to its scope
-    importChannel = name: outputOverlays:
+    # Imports a channel from a channel function call result
+    importChannel = name: channelArguments:
       let
         # Allow channels to add nixpkgs overlays to their base pkgs. This also
         # allows channels to override other channels since pkgs.channelPkgs can be
@@ -65,7 +65,7 @@
           # Remove floxChannels as we modify them slightly for access by other channels
           # Don't let nixpkgs override our own extend
           # Remove appendOverlays as it doesn't use the current overlay chain
-          (removeAttrs channelPkgs [ "floxChannels" "extend" "appendOverlays" ]);
+          (removeAttrs channelPkgs [ "extend" "appendOverlays" ]);
 
         # Traces evaluation of another channel accessed from this one
         subchannelTrace = subname:
@@ -145,66 +145,31 @@
 
       in
         # Apply all the channels overlays to the scope
-        withOverlays outputOverlays;
+        withOverlays channelArguments.outputOverlays;
 
     importChannelSrc = name: src: withVerbosity 1
       (builtins.trace "Importing channel `${name}` from `${toString src}`")
-      (importChannel name (import (src + "/channel.nix")).outputOverlays);
+      (importChannel name (import src).channelArguments);
 
-    # The channel mapping to be passed into nixpkgs. This also allows nixpkgs
-    # overlays to deeply override packages with channel versions
+    # All the channels
     floxChannels = lib.mapAttrs importChannelSrc channelNixexprs // {
 
       # Override our own channel to the current directory
-      ${channelName} = importChannel channelName outputOverlays;
+      ${channelName} = importChannel channelName channelArguments;
 
     };
-
-
-    outputs = floxChannels.${channelName}.flox.outputs // {
-      unfiltered = floxChannels.${channelName};
-    };
-
   in {
-    # Should return:
-    # - outputOverlays (so that other channels can import that)
-    # - inputChannels (so that the transitive dependencies can be found)
-    # - resultScope (so that the result can be evaluated)
-    inherit inputChannels outputOverlays outputs floxChannels;
+    # This exposes both inputChannels, which exposes the dependencies of this channel
+    # And outputOverlays, which is needed if this channel wants to be used as a dependency
+    inherit channelArguments;
+
+    # The final output attributes of this channel
+    outputs = floxChannels.${channelName}.flox.outputs;
+
+    # For debugging
+    inherit floxChannels;
   };
 
-  auto = let
-
-    # Given a directory and self/super, generate an attribute set where every
-    # attribute corresponds to a subdirectory, which is autocalled with the given callPackage
-    genPackageDirAttrs = dir: self: super: callPackage:
-      let
-        inherit (super) lib;
-        # TODO: Warn or error or do something else for non-directories?
-        subdirs = lib.attrNames (lib.filterAttrs (name: type: type == "directory") (builtins.readDir dir));
-        subdirPackage = name: self.flox.withVerbosity 4
-          (builtins.trace "Auto-calling ${toString (dir + "/${name}")}")
-          (callPackage (dir + "/${name}") {});
-      in lib.genAttrs subdirs subdirPackage;
-
-  in {
-    python = dir: self: super:
-      let
-        autoPythonPackages = version:
-          let
-            pythonPackages = "python${toString version}Packages";
-          in {
-            ${pythonPackages} = super.${pythonPackages}
-              # The callPackage within this package set should have the correct default python version
-              # So instead of just using self directly, we use self with the channel config adjusted to what we need
-              // { callPackage = super.lib.callPackageWith (self.flox.withChannelConfig { defaultPythonVersion = version; }); }
-              // genPackageDirAttrs dir self super self.${pythonPackages}.callPackage;
-          };
-      in autoPythonPackages 2 // autoPythonPackages 3 // {
-        python = self."python${toString self.flox.channelConfig.defaultPythonVersion}";
-        pythonPackages = self."python${toString self.flox.channelConfig.defaultPythonVersion}Packages";
-      };
-  };
-
+  auto = import ./auto.nix;
 }
 

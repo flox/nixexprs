@@ -13,29 +13,9 @@ let
         collectEntries set.${attr} (errorSet.${attr} or null) (attrPath ++ [ attr ])
       ) (lib.attrNames set);
 
-  # Generate attrName/projectName tuples for top-level packages
-  # containing "project" attribute.
-  top_level_mappings = map (x: {
-    attrName = x;
-    projectName = attributes.${x}.project;
-  }) (
-    builtins.filter (x: builtins.hasAttr "project" attributes.${x}) (
-      builtins.attrNames attributes
-    )
-  );
-
-  # Function to generate attrName/projectName tuples for packages
-  # of a sub-namespace (e.g. "perlPackages", "pythonPackages").
-  genMapping = namespace:
-    let
-      pkglist = builtins.filter (x:
-        builtins.hasAttr "project" attributes.${namespace}.${x}
-      ) ( builtins.attrNames attributes.${namespace} );
-    in
-      map (x: {
-        attrName = namespace + "." + x;
-        projectName = attributes.${namespace}.${x}.project;
-      }) pkglist;
+      ownResult = lib.optional (set ? project) {
+        ${set.project} = [ (lib.concatStringsSep "." attrPath) ];
+      };
 
       # Outputs the attribute path that's being evaluated to stderr
       # (when --show-trace) with a known format such that we can detect it and
