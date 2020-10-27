@@ -39,15 +39,6 @@
           };
       in lib.mapAttrs importFun channelsJson;
 
-    # Want:
-    # <channelName> -> { outputOverlays = ...; srcs = ...; }
-    # For the current channel, get outputOverlays from the arguments
-    #   -> allows testing things without committing
-    # For the other channels, get outputOverlays by looking at <$currentChannel-meta>/channels.json
-    # For all channels, get srcs from <$channel-meta>/srcs
-    # Get the list of channels from <$currentChannel-meta>/channels.json
-
-
     # Imports a channel from a channel function call result
     importChannel = name: channelArguments:
       let
