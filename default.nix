@@ -51,21 +51,14 @@
     # Imports a channel from a channel function call result
     importChannel = name: channelArguments:
       let
-        # Allow channels to add nixpkgs overlays to their base pkgs. This also
-        # allows channels to override other channels since pkgs.channelPkgs can be
-        # changed via overlays
-        # TODO: nixpkgs overlays?
-        #channelPkgs = pkgs.appendOverlays nixpkgsOverlays;
-        channelPkgs = pkgs;
-
         channelPkgs' = withVerbosity 6
           (lib.mapAttrsRecursiveCond
             (value: ! lib.isDerivation value)
             (path: builtins.trace "Channel `${name}` is evaluating nixpkgs attribute ${lib.concatStringsSep "." path}"))
-          # Remove floxChannels as we modify them slightly for access by other channels
           # Don't let nixpkgs override our own extend
           # Remove appendOverlays as it doesn't use the current overlay chain
-          (removeAttrs channelPkgs [ "extend" "appendOverlays" ]);
+          # TODO: nixpkgs overlays?
+          (removeAttrs pkgs [ "extend" "appendOverlays" ]);
 
         # Traces evaluation of another channel accessed from this one
         subchannelTrace = subname:
@@ -78,10 +71,14 @@
         # Each channel can refer to other channels via their names. This defines
         # the name -> channel mapping
         floxChannels' = self: lib.mapAttrs (subname: value:
-          subchannelTrace subname
-          # Propagate the channel config down to all channels
-          # And only expose the finalResult attribute so only the explicitly exposed attributes can be accessed
-          (value.flox.withChannelConfig self.flox.channelConfig).flox.outputs
+          if name == subname
+            then throw "Channel ${name} tried to access itself through flox.channels.${name}, but that shouldn't be necessary"
+          else if ! lib.elem subname channelArguments.inputChannels
+            then throw "Channel ${name} tried to access channel ${subname}, but it doesn't specify it in inputChannels"
+          else subchannelTrace subname
+            # Propagate the channel config down to all channels
+            # And only expose the finalResult attribute so only the explicitly exposed attributes can be accessed
+            (value.flox.withChannelConfig self.flox.channelConfig).flox.outputs
         ) floxChannels;
 
         # A custom lib.extends function that can emit debug information for what attributes each overlay adds
@@ -120,6 +117,7 @@
                   # Returns self, but with some channelConfig properties adjusted
                   # E.g. `withChannelConfig { defaultPythonVersion = 3; }` makes sure the result refers has all python defaults set to 3
                   # TODO: This doesn't seem to override channelConfig
+                  # TODO: The channelConfig's of dependencies need to be used as a default if it's not provided by the importing channel
                   withChannelConfig = config:
                     # If the given properties already match the current config, just return self
                     if builtins.intersectAttrs config self.flox.channelConfig == config then self
