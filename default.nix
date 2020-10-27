@@ -77,14 +77,16 @@
           let
             super = fun self;
             overlayResult = overlay self super;
-          in super // withVerbosity 5
-            (builtins.trace "Channel `${name}` applies an overlay with attributes: ${lib.concatStringsSep ", " (lib.attrNames overlayResult)}")
-            (overlayResult // {
-              flox = super.flox // {
+            result = super // withVerbosity 5
+              (builtins.trace "Channel `${name}` applies an overlay with attributes: ${lib.concatStringsSep ", " (lib.attrNames overlayResult)}")
+              overlayResult;
+            finalResult = result // {
+              flox = result.flox // {
                 # TODO: Filter sub-attribute sets
-                outputs = super.flox.outputs // builtins.intersectAttrs overlayResult self;
+                outputs = result.flox.outputs // builtins.intersectAttrs overlayResult self;
               };
-            });
+            };
+          in finalResult;
 
         # A function that returns the channel package set with the given overlays applied
         withOverlays = overlays:
