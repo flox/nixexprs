@@ -6,7 +6,7 @@
 }@args:
 {
   channel =
-    { channelName
+    { name
     , nixpkgsOverlays ? []
     , inputChannels ? []
     , channelConfig ? {}
@@ -30,7 +30,7 @@
     # Mapping from channel name to a path to its nixexprs root
     channelNixexprs =
       let
-        channelsJson = lib.importJSON (lookupNixPath "${channelName}-meta/channels.json");
+        channelsJson = lib.importJSON (lookupNixPath "${name}-meta/channels.json");
         importFun = name: args:
           # For debugging, allow channel_json to specify paths directly
           if ! lib.isAttrs args then args
@@ -155,7 +155,7 @@
     floxChannels = lib.mapAttrs importChannelSrc channelNixexprs // {
 
       # Override our own channel to the current directory
-      ${channelName} = importChannel channelName channelArguments;
+      ${name} = importChannel name channelArguments;
 
     };
   in {
@@ -164,7 +164,7 @@
     inherit channelArguments;
 
     # The final output attributes of this channel
-    outputs = floxChannels.${channelName}.flox.outputs;
+    outputs = floxChannels.${name}.flox.outputs;
 
     # For debugging
     inherit floxChannels;
