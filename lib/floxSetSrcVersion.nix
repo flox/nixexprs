@@ -1,11 +1,13 @@
-{ lib, args, fetchgit }:
+{ lib, flox, fetchgit }:
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --arg srcpath <path>,
 # so that needs to take precedence over all other sources of src.
 project: override:
   let
-    s = args.srcpath or "";
-    _srcs_json_ = ../srcs + "/${project}.json";
+    srcs = flox.lookupNixPath "${flox.channelName}-meta/srcs";
+
+    s = flox.args.srcpath or "";
+    _srcs_json_ = srcs + "/${project}.json";
     revdata = lib.importJSON _srcs_json_;
     _latest_ = revdata.latest;
     _srcs_ = revdata.srcs;
@@ -58,11 +60,11 @@ project: override:
     #
     src =
       let
-        _manifest_json = builtins.toPath args.manifest_json or "";
-        _manifest = builtins.toPath args.manifest or "";
+        _manifest_json = builtins.toPath flox.args.manifest_json or "";
+        _manifest = builtins.toPath flox.args.manifest or "";
       in
-        if args.manifest_json or "" == "" then (
-          if args.manifest or "" == "" then _src else lib.sourceFilesByManifestFile _src _manifest
+        if flox.args.manifest_json or "" == "" then (
+          if flox.args.manifest or "" == "" then _src else lib.sourceFilesByManifestFile _src _manifest
         ) else lib.sourceFilesByManifestJsonFile _src _manifest_json;
 
     version = if s == "" then autoversion else "manual";

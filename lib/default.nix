@@ -1,10 +1,15 @@
-self: super: {
+self: {
 
-  floxSetSrcVersion = self.callPackage ./floxSetSrcVersion.nix { };
-  removePathDups = self.makeSetupHook {} ./setup-hooks/removePathDups.sh;
+  utils = {
+    removePathDups = self.makeSetupHook {} ./setup-hooks/removePathDups.sh;
+  };
+
+  source = {
+    setVersion = self.callPackage ./floxSetSrcVersion.nix { };
+  };
 
   # flox custom builders & stuff (in future).
-  flox = {
+  builders = {
     mkDerivation = self.callPackage ./mkDerivation.nix { };
     buildGoPackage = self.callPackage ./buildGoPackage.nix { };
     # Will deprecate buildGoPackage when everyone migrates to Go modules.
