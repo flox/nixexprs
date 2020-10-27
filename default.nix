@@ -27,6 +27,7 @@
     pkgs = import <nixpkgs> {};
     inherit (pkgs) lib;
 
+    # TODO: Also implement the prefix-less lookup
     lookupNixPath = path:
       let
         entry = lib.findFirst (e: lib.hasPrefix e.prefix path)
@@ -102,7 +103,7 @@
 
     importChannelSrc = name: src: withVerbosity 1
       (builtins.trace "Importing channel `${name}` from `${toString src}`")
-      (importChannel name (import src).channelArguments);
+      (importChannel name (import src {}).channelArguments);
 
     # All the channels
     floxChannels = lib.mapAttrs importChannelSrc channelNixexprs // {
