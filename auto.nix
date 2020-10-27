@@ -29,4 +29,10 @@ in {
       python = self."python${toString self.flox.channelConfig.defaultPythonVersion}";
       pythonPackages = self."python${toString self.flox.channelConfig.defaultPythonVersion}Packages";
     };
+
+  perl = dir: self: super: {
+    perlPackages = super.perlPackages
+      // { callPackage = super.lib.callPackageWith self; }
+      // genPackageDirAttrs dir self super self.perlPackages.callPackage;
+  };
 }
