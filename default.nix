@@ -13,6 +13,7 @@
     , srcpath ? ""
     , manifest_json ? ""
     , manifest ? ""
+    , getOutputs ? true
     }@args:
   let
 
@@ -106,13 +107,14 @@
       ${name} = importChannel name channelArguments;
 
     };
-  in {
-    # This exposes both inputChannels, which exposes the dependencies of this channel
-    # And outputOverlays, which is needed if this channel wants to be used as a dependency
-    inherit channelArguments;
 
     # The final output attributes of this channel
     outputs = floxChannels.${name}.flox.outputs;
+
+  in if getOutputs then outputs else {
+    # This exposes both inputChannels, which exposes the dependencies of this channel
+    # And outputOverlays, which is needed if this channel wants to be used as a dependency
+    inherit channelArguments;
 
     # For debugging
     inherit floxChannels;
