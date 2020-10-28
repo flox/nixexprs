@@ -20,15 +20,12 @@ let
   # Each channel can refer to other channels via their names. This defines
   # the name -> channel mapping
   floxChannels' = lib.mapAttrs (subname: value:
-    if channelName == subname
-      then throw "Channel ${channelName} tried to access itself through flox.channels.${channelName}, but that shouldn't be necessary"
-    else if ! lib.elem subname channelArguments.inputChannels
-      then throw "Channel ${channelName} tried to access channel ${subname}, but it doesn't specify it in inputChannels"
-    else subchannelTrace subname
-      # Propagate the channel config down to all channels
-      # And only expose the finalResult attribute so only the explicitly exposed attributes can be accessed
-      (value.flox.withChannelConfig self.flox.channelConfig).flox.outputs
-      ) floxChannels;
+    # TODO: Add back check that ensures only channels declared in channels.json can be accessed
+    subchannelTrace subname
+    # Propagate the channel config down to all channels
+    # And only expose the finalResult attribute so only the explicitly exposed attributes can be accessed
+    (value.flox.withChannelConfig self.flox.channelConfig).flox.outputs
+  ) floxChannels;
 
 in
 {

@@ -3,8 +3,6 @@
   channel =
     # Arguments for the channel file in nixexprs
     { name
-    , nixpkgsOverlays ? []
-    , inputChannels ? []
     , channelConfig ? {}
     , outputOverlays ? []
     }:
@@ -20,7 +18,7 @@
     # Propagating arguments like this, because just using `@channelArguments`
     # above would not propagate defaults
     channelArguments = {
-      inherit name nixpkgsOverlays inputChannels channelConfig outputOverlays;
+      inherit name channelConfig outputOverlays;
     };
 
     # We only import nixpkgs once with an overlay that adds all channels, which is
