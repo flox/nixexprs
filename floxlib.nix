@@ -3,7 +3,6 @@
 , floxChannels
 , channelArguments
 , withVerbosity
-, channelMetas
 , args
 , self
 }:
@@ -33,7 +32,7 @@ let
 
 in
 {
-  inherit channelName channelMetas args;
+  inherit channelName args;
   # Expose all channels
   channels = floxChannels';
   channelConfig = channelArguments.channelConfig;

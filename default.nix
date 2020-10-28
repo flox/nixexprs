@@ -31,16 +31,7 @@
     withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
     # Mapping from channel name to a path to its nixexprs root
-    channelNixexprs =
-      let
-        channelsJson = lib.importJSON (builtins.findFile builtins.nixPath "${name}-meta/channels.json");
-        importFun = name: args:
-          # For debugging, allow channel_json to specify paths directly
-          if ! lib.isAttrs args then args
-          else pkgs.fetchgit {
-            inherit (args) url rev sha256 fetchSubmodules;
-          };
-      in lib.mapAttrs importFun channelsJson;
+    channelNixexprs = lib.mapAttrs (name: subdir: <flox-channels> + "/${subdir}") (builtins.readDir <flox-channels>);
 
     # Imports a channel from a channel function call result
     importChannel = name: channelArguments:
@@ -80,7 +71,6 @@
                 flox = import ./floxlib.nix {
                   channelName = name;
                   inherit lib floxChannels self args channelArguments withVerbosity;
-                  channelMetas = lib.mapAttrs (name: value: builtins.findFile builtins.nixPath "${name}-meta") floxChannels;
                 };
 
                 callPackage = lib.callPackageWith self;
