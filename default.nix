@@ -28,14 +28,12 @@
     pkgs = import <nixpkgs> {};
     inherit (pkgs) lib;
 
-    inherit (import ./utils.nix { inherit lib; }) lookupNixPath;
-
     withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
     # Mapping from channel name to a path to its nixexprs root
     channelNixexprs =
       let
-        channelsJson = lib.importJSON (lookupNixPath "${name}-meta/channels.json");
+        channelsJson = lib.importJSON (builtins.findFile builtins.nixPath "${name}-meta/channels.json");
         importFun = name: args:
           # For debugging, allow channel_json to specify paths directly
           if ! lib.isAttrs args then args
@@ -81,8 +79,8 @@
               channelPkgs' // {
                 flox = import ./floxlib.nix {
                   channelName = name;
-                  inherit lib floxChannels self args channelArguments withVerbosity lookupNixPath;
-                  channelMetas = lib.mapAttrs (name: value: lookupNixPath "${name}-meta") floxChannels;
+                  inherit lib floxChannels self args channelArguments withVerbosity;
+                  channelMetas = lib.mapAttrs (name: value: builtins.findFile builtins.nixPath "${name}-meta") floxChannels;
                 };
 
                 callPackage = lib.callPackageWith self;
@@ -98,7 +96,7 @@
 
     importChannelSrc = name: src: withVerbosity 1
       (builtins.trace "Importing channel `${name}` from `${toString src}`")
-      (importChannel name (import src {}).channelArguments);
+      (importChannel name (import src { getOutputs = false; }).channelArguments);
 
     # All the channels
     floxChannels = lib.mapAttrs importChannelSrc channelNixexprs // {

@@ -4,7 +4,7 @@
 # so that needs to take precedence over all other sources of src.
 project: override:
   let
-    srcs = flox.utils.lookupNixPath "${flox.channelName}-meta/srcs";
+    srcs = builtins.findFile builtins.nixPath "${flox.channelName}-meta/srcs";
 
     s = flox.args.srcpath or "";
     _srcs_json_ = srcs + "/${project}.json";

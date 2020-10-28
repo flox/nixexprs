@@ -3,7 +3,6 @@
 , floxChannels
 , channelArguments
 , withVerbosity
-, lookupNixPath
 , channelMetas
 , args
 , self
@@ -61,7 +60,7 @@ in
   outputs = {};
 
   utils = {
-    inherit withVerbosity lookupNixPath;
+    inherit withVerbosity;
   };
 
 } // import ./lib self
