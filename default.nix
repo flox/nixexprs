@@ -31,7 +31,19 @@
     withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
     # Mapping from channel name to a path to its nixexprs root
-    channelNixexprs = lib.mapAttrs (name: subdir: <flox-channels> + "/${subdir}") (builtins.readDir <flox-channels>);
+    # Search through both prefixed and non-prefixed paths in NIX_PATH
+    channelNixexprs =
+      let
+        expandEntry = e:
+          if e.prefix != "" then [{
+            name = e.prefix;
+            value = e.path;
+          }]
+          else lib.mapAttrsToList (name: type: {
+            inherit name;
+            value = e.path + "/${name}";
+          }) (builtins.readDir e.path);
+      in lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
 
     # Imports a channel from a channel function call result
     importChannel = name: channelArguments:
