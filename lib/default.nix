@@ -15,7 +15,7 @@ self: {
     buildPerlPackage = self.callPackage ./buildPerlPackage.nix { };
 
     buildPythonPackage = self.pythonPackages.callPackage ./buildPythonPackage.nix {};
-    buildPythonApplication = self.flox."buildPython${toString self.channelConfig.defaultPythonVersion}Application";
+    buildPythonApplication = self.flox.builders."buildPython${toString self.flox.channelConfig.defaultPythonVersion}Application";
 
     buildPython2Application = self.python2Packages.callPackage ./buildPythonApplication.nix {};
     buildPython3Application = self.python3Packages.callPackage ./buildPythonApplication.nix {};
