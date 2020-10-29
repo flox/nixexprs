@@ -15,7 +15,7 @@ in {
   flox = super.flox // {
 
     auto = super.flox.auto // {
-      python = super.flox.auto.python // {
+      python = super.flox.auto.python or {} // {
         # A function to return the main scope, but with the default python version changed
         withDefaultVersion = newVersion:
           if self.flox.auto.python.defaultVersion or "" == newVersion then self

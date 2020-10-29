@@ -12,7 +12,7 @@ let
 in {
   flox = super.flox // {
     auto = super.flox.auto // {
-      perl = super.flox.auto.perl // {
+      perl = super.flox.auto.perl or {} // {
         scope = self.flox.auto.toplevel.scope // self.flox.auto.toplevel.scope.perlPackages;
       };
     };

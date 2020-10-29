@@ -12,7 +12,7 @@ let
 in {
   flox = super.flox // {
     auto = super.flox.auto // {
-      toplevel = super.flox.auto.toplevel // {
+      toplevel = super.flox.auto.toplevel or {} // {
         # Merge the main scope and our own channels scope together recursively
         scope = lib.recursiveUpdateUntil (path: l: r: lib.isDerivation r) self self.flox.outputs;
       };
