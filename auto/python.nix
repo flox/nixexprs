@@ -23,7 +23,10 @@ in {
             flox.auto.python.defaultVersion = newVersion;
           });
 
-        scope = self.flox.auto.toplevel.scope // self.flox.auto.toplevel.scope.pythonPackages;
+        scope = self.flox.auto.toplevel.scope // self.flox.auto.toplevel.scope.pythonPackages // {
+          python = self."python${toString self.flox.auto.python.defaultVersion}";
+          pythonPackages = self.flox.auto.toplevel.scope.pythonPackages;
+        };
       };
     };
 
