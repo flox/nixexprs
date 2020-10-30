@@ -6,11 +6,15 @@
 # order to update the top-level projects.json file used by flox to
 # identify which expressions are built from which project. Invoke with:
 #
-# % ./genProjectsJson | jq '.projects'
+# % ./genProjectsJson <path to nixexprs> | jq '.projects'
 #
 # Failing attributes along with their errors are included in the `failures` key:
 #
-# % ./genProjectsJson | jq '.failures'
+# % ./genProjectsJson <path to nixexprs> | jq '.failures'
+
+set -euo pipefail
+
+nixexprsPath=$1
 
 prevErr=$(mktemp)
 err=$(mktemp)
@@ -32,7 +36,8 @@ nixEval() {
   nix-instantiate genProjectsJson.nix 2>"$err" \
     --eval --strict --json --show-trace \
     --argstr tracePrefix "$tracePrefix" \
-    --argstr errorSetJson "$errorSet"
+    --argstr errorSetJson "$errorSet" \
+    --argstr nixexprsPath "$nixexprsPath"
 }
 
 while ! projects=$(nixEval); do

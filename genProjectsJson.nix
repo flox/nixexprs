@@ -1,6 +1,7 @@
 # Use ./genProjectsJson for evaluating this
 { errorSetJson
 , tracePrefix
+, nixexprsPath
 }:
 let
   lib = import <nixpkgs/lib>;
@@ -27,4 +28,4 @@ let
         else lib.zipAttrsWith (name: lib.concatLists) (lib.optionals shouldRecurse subResult ++ ownResult);
     in withErrorContext result;
 
-in collectEntries (import ./. {}) (lib.importJSON errorSetJson) []
+in collectEntries (import nixexprsPath {}) (lib.importJSON errorSetJson) []
