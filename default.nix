@@ -52,6 +52,9 @@ let
   # The pkgs set for a specific channel
   channelPkgs = parentChannel: { name, auto, extraOverlays, args }:
     let
+
+      channels = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
+
       channelOverlay = self: super: {
         floxInternal = {
           inherit parentChannel args withVerbosity;
@@ -67,7 +70,8 @@ let
               else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
                 + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
           ) self self.floxInternal.outputs // {
-            channels = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
+            inherit channels;
+            flox = channels.flox;
           };
         };
       };
