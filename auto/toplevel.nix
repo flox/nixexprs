@@ -7,7 +7,8 @@ let
     inherit lib;
     withVerbosity = self.floxInternal.withVerbosity;
     path = auto.path;
-    callPackage = lib.callPackageWith self.floxInternal.mainScope;
+    scope = self.floxInternal.mainScope;
+    super = super;
   };
 
 in {

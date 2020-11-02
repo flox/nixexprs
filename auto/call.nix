@@ -2,7 +2,8 @@
 # attribute corresponds to a subdirectory, which is autocalled with the given callPackage
 { lib
 , path
-, callPackage
+, scope
+, super
 , withVerbosity
 }:
 let
@@ -17,5 +18,7 @@ let
     }.${type} or (throw "Can't auto-call file type ${type}")) (builtins.readDir path);
   subpathPackage = name: path: withVerbosity 4
     (builtins.trace "Auto-calling ${toString path}")
-    (callPackage path {});
+    (lib.callPackageWith (scope // {
+      ${name} = super.${name};
+    }) path {});
 in lib.mapAttrs subpathPackage subpaths
