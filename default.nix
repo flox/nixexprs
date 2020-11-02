@@ -38,7 +38,8 @@ let
           inherit name;
           value = e.path + "/${name}";
         }) (builtins.readDir e.path);
-    in lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
+      result = lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
+    in withVerbosity 1 (builtins.trace "Found these channel-like entries in NIX_PATH: ${toString (lib.attrNames result)}") result;
 
   importChannelSrc = name: src: withVerbosity 1
     (builtins.trace "Importing channel `${name}` from `${toString src}`")
