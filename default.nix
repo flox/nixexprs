@@ -13,7 +13,14 @@
 }@args:
 let
 
-  channelArguments = {
+  # We only import nixpkgs once with an overlay that adds all channels, which is
+  # also used as a base set for all channels themselves
+  pkgs = import <nixpkgs> {};
+  inherit (pkgs) lib;
+
+  withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
+
+  myChannelArgs = {
     inherit name auto extraOverlays args;
   };
 
@@ -33,38 +40,34 @@ let
         }) (builtins.readDir e.path);
     in lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
 
-  # Merges pkgs and own channel outputs recursively
-  mainScope = pkgs: lib.recursiveUpdateUntil (path: l: r:
-    let
-      lDrv = lib.isDerivation l;
-      rDrv = lib.isDerivation r;
-    in
-      if lDrv == rDrv then rDrv
-      else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
-        + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
-  ) pkgs outputs // {
-    channels = channelOutputs;
+  importChannelSrc = name: src: withVerbosity 1
+    (builtins.trace "Importing channel `${name}` from `${toString src}`")
+    (import src { return = "channelArguments"; });
+
+  channelArgs = lib.mapAttrs importChannelSrc channelNixexprs // {
+    ${name} = myChannelArgs;
   };
 
-  # We only import nixpkgs once with an overlay that adds all channels, which is
-  # also used as a base set for all channels themselves
-  pkgs = import <nixpkgs> {};
-  inherit (pkgs) lib;
-
-  withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
   # The pkgs set for a specific channel
-  channelPkgs = { name, auto, extraOverlays, args }:
+  channelPkgs = parentChannel: { name, auto, extraOverlays, args }:
     let
       channelOverlay = self: super: {
         floxInternal = {
-          mainScope = mainScope self;
-          inherit withVerbosity floxChannels;
+          inherit parentChannel args withVerbosity;
           outputs = {};
-          # This can't be in the flox channel itself, because this function
-          # needs to be different for every channel
-          setSrcVersion = import ./setSrcVersion.nix {
-            inherit pkgs name args;
+
+          # Merges pkgs and own channel outputs recursively
+          mainScope = lib.recursiveUpdateUntil (path: l: r:
+            let
+              lDrv = lib.isDerivation l;
+              rDrv = lib.isDerivation r;
+            in
+              if lDrv == rDrv then rDrv
+              else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
+                + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
+          ) self self.floxInternal.outputs // {
+            channels = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
           };
         };
       };
@@ -74,18 +77,16 @@ let
         ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 
-  importChannelSrc = name: src: withVerbosity 1
-    (builtins.trace "Importing channel `${name}` from `${toString src}`")
-    (channelPkgs (import src { return = "channelArguments"; }));
 
-  floxChannels = lib.mapAttrs importChannelSrc channelNixexprs // {
-    ${name} = channelPkgs channelArguments;
-  };
+  channels = lib.mapAttrs (parent: _:
+    lib.mapAttrs (_: args:
+      channelPkgs parent args
+    ) channelArgs
+  ) channelArgs;
 
-  channelOutputs = lib.mapAttrs (subname: pkgs: pkgs.floxInternal.outputs) floxChannels;
-
-  outputs = channelOutputs.${name};
+  outputs = channels.${name}.${name}.floxInternal.outputs;
 
 in {
-  inherit outputs channelArguments;
+  inherit outputs;
+  channelArguments = myChannelArgs;
 }.${return}
