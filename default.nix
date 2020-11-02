@@ -67,7 +67,7 @@ let
               lDrv = lib.isDerivation l;
               rDrv = lib.isDerivation r;
             in
-              if lDrv == rDrv then rDrv
+              if lDrv == rDrv then if rDrv then true else ! lib.isAttrs rDrv
               else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
                 + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
           ) self self.floxInternal.outputs // {
