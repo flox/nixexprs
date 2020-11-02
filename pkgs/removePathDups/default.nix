@@ -1,1 +1,2 @@
-{ nixpkgs }: nixpkgs.makeSetupHook {} ./removePathDups.sh
+{ makeSetupHook }:
+makeSetupHook {} ./removePathDups.sh

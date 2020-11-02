@@ -3,7 +3,7 @@
 # from metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ beam, erlangR18, flox, ... }:
+{ beam, erlangR18, setSrcVersion, ... }:
 
 # Arguments provided to flox.mkDerivation()
 { project	# the name of the project, required
@@ -17,7 +17,7 @@ beamPackages.buildErlangMk ( args // rec {
   # build-erlang-mk.nix re-appends the version to the name,
   # so we need to not inherit name and instead pass what we
   # call "pname" as "name".
-  inherit (flox.source.setVersion project args) version src pname src_json;
+  inherit (setSrcVersion project args) version src pname src_json;
   name = pname;
 
   # Create .flox.json file in root of package dir to record
