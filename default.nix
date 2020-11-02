@@ -26,30 +26,29 @@ let
           name = e.prefix;
           value = e.path;
         }]
+        # TODO: Change flox wrapper to do this expansion
         else lib.mapAttrsToList (name: type: {
           inherit name;
           value = e.path + "/${name}";
         }) (builtins.readDir e.path);
     in lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
 
-  # Common to all channels
-  baseOverlay = self: super: {
-    flox = {
-      channels = channelOutputs;
-      inherit withVerbosity;
-      outputs = {};
-    };
+  # Merges pkgs and own channel outputs recursively
+  mainScope = pkgs: lib.recursiveUpdateUntil (path: l: r:
+    let
+      lDrv = lib.isDerivation l;
+      rDrv = lib.isDerivation r;
+    in
+      if lDrv == rDrv then rDrv
+      else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
+        + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
+  ) pkgs outputs // {
+    channels = channelOutputs;
   };
 
   # We only import nixpkgs once with an overlay that adds all channels, which is
   # also used as a base set for all channels themselves
-  pkgs = import <nixpkgs> {
-    overlays = [
-      baseOverlay
-      (import ./lib)
-    ];
-  };
-
+  pkgs = import <nixpkgs> {};
   inherit (pkgs) lib;
 
   withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
@@ -58,16 +57,21 @@ let
   channelPkgs = { name, auto, extraOverlays, args }:
     let
       channelOverlay = self: super: {
-        flox = super.flox // {
-          inherit name args auto;
+        floxInternal = {
+          mainScope = mainScope self;
+          inherit withVerbosity floxChannels;
+          outputs = {};
+          # This can't be in the flox channel itself, because this function
+          # needs to be different for every channel
+          setSrcVersion = import ./setSrcVersion.nix {
+            inherit pkgs name args;
+          };
         };
       };
-      overlays = [
-        channelOverlay
-        (import ./auto/python.nix)
-        (import ./auto/perl.nix)
-        (import ./auto/toplevel.nix)
-      ] ++ extraOverlays;
+      overlays = [ channelOverlay ]
+        ++ lib.optional (auto ? toplevel)
+          (import ./auto/toplevel.nix auto.toplevel)
+        ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 
   importChannelSrc = name: src: withVerbosity 1
@@ -78,9 +82,10 @@ let
     ${name} = channelPkgs channelArguments;
   };
 
-  channelOutputs = lib.mapAttrs (subname: pkgs: pkgs.flox.outputs) floxChannels;
+  channelOutputs = lib.mapAttrs (subname: pkgs: pkgs.floxInternal.outputs) floxChannels;
+
+  outputs = channelOutputs.${name};
 
 in {
-  inherit channelArguments;
-  outputs = channelOutputs.${name};
+  inherit outputs channelArguments;
 }.${return}
