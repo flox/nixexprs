@@ -71,7 +71,7 @@ let
                 + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
           ) self self.floxInternal.outputs // {
             channels = channels';
-            flox = channels'.flox;
+            flox = channels'.flox or (throw "Attempted to access flox channel from channel ${name}, but no flox channel is present in NIX_PATH");
           };
         };
       };
