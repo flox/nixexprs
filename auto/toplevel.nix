@@ -1,19 +1,17 @@
-auto:
+path:
 self: super:
 let
   inherit (super) lib;
 
   autoPkgs = import ./call.nix {
-    inherit lib;
+    inherit lib path;
     withVerbosity = self.floxInternal.withVerbosity;
-    path = auto.path;
     scope = self.floxInternal.mainScope;
     super = super;
   };
 
 in {
   floxInternal = super.floxInternal // {
-    outputs = super.floxInternal.outputs
-      // lib.optionalAttrs (auto ? path) autoPkgs;
+    outputs = super.floxInternal.outputs // autoPkgs;
   };
 }

@@ -1,8 +1,7 @@
 # Arguments for the channel file in nixexprs
 { # TODO: Try to figure out if the name can be removed
   name
-# TODO: Make sure that you get an error if you set an unsupported auto
-, auto ? {}
+, topdir
 , extraOverlays ? []
 }:
 # Arguments for the command line
@@ -22,7 +21,7 @@ let
   withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
   myChannelArgs = {
-    inherit name auto extraOverlays args;
+    inherit name topdir extraOverlays args;
   };
 
   # Mapping from channel name to a path to its nixexprs root
@@ -51,7 +50,7 @@ let
 
 
   # The pkgs set for a specific channel
-  channelPkgs = parentChannel: { name, auto, extraOverlays, args }:
+  channelPkgs = parentChannel: { name, topdir, extraOverlays, args }:
     let
 
       channels' = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
@@ -77,8 +76,7 @@ let
         };
       };
       overlays = [ channelOverlay ]
-        ++ lib.optional (auto ? toplevel)
-          (import ./auto/toplevel.nix auto.toplevel)
+        ++ [ (import ./auto/toplevel.nix (topdir + "/pkgs")) ]
         ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 
