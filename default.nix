@@ -1,5 +1,6 @@
 # Arguments for the channel file in nixexprs
-{ name
+{ # TODO: Try to figure out if the name can be removed
+  name
 # TODO: Make sure that you get an error if you set an unsupported auto
 , auto ? {}
 , extraOverlays ? []
@@ -53,7 +54,7 @@ let
   channelPkgs = parentChannel: { name, auto, extraOverlays, args }:
     let
 
-      channels = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
+      channels' = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
 
       channelOverlay = self: super: {
         floxInternal = {
@@ -70,8 +71,8 @@ let
               else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
                 + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
           ) self self.floxInternal.outputs // {
-            inherit channels;
-            flox = channels.flox;
+            channels = channels';
+            flox = channels'.flox;
           };
         };
       };
