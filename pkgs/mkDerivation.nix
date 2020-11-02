@@ -2,15 +2,15 @@
 # magic required to locate source, version and build number from
 # metadata cached by the nixpkgs mechanism.
 
-{ nixpkgs, flox }:
+{ stdenv, floxInternal }:
 
 # Arguments provided to flox.mkDerivation()
 { project	# the name of the project, required
 , ... } @ args:
 
 # Actually create the derivation.
-nixpkgs.stdenv.mkDerivation ( args // {
-  inherit (flox.setSourceVersion project args) version src name;
+stdenv.mkDerivation ( args // {
+  inherit (floxInternal.setSrcVersion project args) version src name;
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
