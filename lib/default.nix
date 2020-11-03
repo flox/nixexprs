@@ -86,7 +86,7 @@ let
 
   importChannelSrc = name: src: withVerbosity 1
     (builtins.trace "Importing channel `${name}` from `${toString src}`")
-    (import src { return = "channelArguments"; });
+    (import src { inherit name; return = "channelArguments"; });
 
   channelArgs = lib.mapAttrs importChannelSrc channelNixexprs // {
     ${name} = myChannelArgs;
