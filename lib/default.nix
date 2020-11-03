@@ -1,11 +1,11 @@
 # Arguments for the channel file in nixexprs
-{ # TODO: Try to figure out if the name can be removed
-  name
+{ name ? null
 , topdir
 , extraOverlays ? []
-}:
+}@chanArgs:
 # Arguments for the command line
-{ debugVerbosity ? 0
+{ name ? null
+, debugVerbosity ? 0
 , return ? "outputs"
 , srcpath ? ""
 , manifest_json ? ""
@@ -17,6 +17,46 @@ let
   # also used as a base set for all channels themselves
   pkgs = import <nixpkgs> {};
   inherit (pkgs) lib;
+
+  # A list of { name; success | failure } entries, representing heuristics used
+  # to determine the channel name, in the order of preference
+  nameHeuristics =
+    let
+      heuristics = lib.mapAttrs (name: value: value // { inherit name; }) {
+        chanArgs = if chanArgs ? name then { success = chanArgs.name; } else { failure = "No \"name\" defined in the nixexprs default.nix"; };
+        cmdArgs = if args ? name then { success = args.name; } else { failure = "No \"name\" passed with `--argstr name <channel name>`"; };
+        baseName = if baseNameOf topdir != "nixexprs" then { success = baseNameOf topdir; } else { failure = "Directory name of topdir is just \"nixexprs\""; };
+        gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
+        nixPath =
+          let
+            matchingEntries = lib.filterAttrs (name: path: path == topdir) channelNixexprs;
+            matchingNames = lib.unique (lib.attrNames matchingEntries);
+          in if lib.length matchingNames == 0 then { failure = "No entries in NIX_PATH match path ${toString topdir}"; }
+          else if lib.length matchingNames == 1 then { success = lib.elemAt matchingNames 0; }
+          else { failure = "Multiple entries in NIX_PATH match path ${toString topdir}"; };
+      };
+      ordered = [
+        heuristics.chanArgs
+        heuristics.cmdArgs
+        heuristics.nixPath
+        heuristics.baseName
+        heuristics.gitConfig
+      ];
+    in ordered;
+
+  # The warning to issue when no name heuristic was successful
+  fallbackNameWarning = ''
+    Channel name could not be inferred because all heuristics failed:
+    ${lib.concatMapStringsSep "\n" (h: "- ${h.name}: ${h.failure}") nameHeuristics}
+    Using channel name "unknown" instead. Because of this, channels dependent on your channel won't use your local uncommitted changes
+  '';
+
+  # The name as determined by the first successful name heuristic
+  name =
+    let
+      fallback = { name = "fallback"; success = lib.warn fallbackNameWarning "unknown"; };
+      firstSuccess = lib.findFirst (e: e ? success) fallback nameHeuristics;
+    in withVerbosity 2 (builtins.trace "Determined channel name to be \"${firstSuccess.success}\" with heuristic ${firstSuccess.name}") firstSuccess.success;
 
   withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
