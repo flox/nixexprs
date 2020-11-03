@@ -1,3 +1,3 @@
-import <flox/lib> {
+import <flox/channel> {
   topdir = ./.;
 }
