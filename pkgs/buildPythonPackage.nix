@@ -18,7 +18,7 @@ builtins.trace (
 )
 
 # Actually create the derivation.
-nixpkgs.pythonPackages.buildPythonPackage ( args // {
+pythonPackages.buildPythonPackage ( args // {
   inherit (setSrcVersion project args) version src pname src_json;
   # Add tools for development environment only.
   nativeBuildInputs = nativeBuildInputs ++ [
