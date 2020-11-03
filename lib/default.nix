@@ -125,7 +125,7 @@ let
         };
       };
       overlays = [ channelOverlay ]
-        ++ [ (import ./auto/toplevel.nix (topdir + "/pkgs")) ]
+        ++ lib.optional (builtins.pathExists (topdir + "/pkgs")) (import ./auto/toplevel.nix (topdir + "/pkgs"))
         ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 
