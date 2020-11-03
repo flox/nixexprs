@@ -11,7 +11,8 @@ project: override:
 
     s = args.srcpath or "";
     _srcs_json_ = srcs + "/${project}.json";
-    revdata = lib.importJSON _srcs_json_;
+    revdata = if builtins.pathExists _srcs_json_ then lib.importJSON _srcs_json_
+      else throw "Could not find source for project \"${project}\" in channel \"${floxInternal.parentChannel}\". Are webhooks for that repository set up?";
     _latest_ = revdata.latest;
     _srcs_ = revdata.srcs;
 
@@ -31,7 +32,7 @@ project: override:
       _branches_.master
     );
     _src_ = _srcs_.${_src_rev_} or (
-      builtins.abort "could not find \"${_src_rev_}\" revision in ${_srcs_json_}"
+      throw "could not find \"${_src_rev_}\" revision in ${_srcs_json_}"
     );
 
     # Select the version from the src's json metadata, but also allow it
