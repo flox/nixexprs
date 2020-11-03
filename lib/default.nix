@@ -25,7 +25,10 @@ let
       heuristics = lib.mapAttrs (name: value: value // { inherit name; }) {
         chanArgs = if chanArgs ? name then { success = chanArgs.name; } else { failure = "No \"name\" defined in the nixexprs default.nix"; };
         cmdArgs = if args ? name then { success = args.name; } else { failure = "No \"name\" passed with `--argstr name <channel name>`"; };
-        baseName = if baseNameOf topdir != "nixexprs" then { success = baseNameOf topdir; } else { failure = "Directory name of topdir is just \"nixexprs\""; };
+        baseName =
+          if dirOf topdir == builtins.storeDir then { failure = "topdir is in /nix/store, basename is nonsensical"; }
+          else if baseNameOf topdir != "nixexprs" then { success = baseNameOf topdir; }
+          else { failure = "Directory name of topdir is just \"nixexprs\""; };
         gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
         nixPath =
           let
