@@ -12,6 +12,11 @@
 , manifest ? ""
 }@args:
 let
+  topdir' = topdir;
+in
+let
+  # To prevent any accidental imports into the store, and to make sure it's a string, not a path
+  topdir = toString topdir';
 
   # We only import nixpkgs once with an overlay that adds all channels, which is
   # also used as a base set for all channels themselves
@@ -34,9 +39,9 @@ let
           let
             matchingEntries = lib.filterAttrs (name: path: path == topdir) channelNixexprs;
             matchingNames = lib.unique (lib.attrNames matchingEntries);
-          in if lib.length matchingNames == 0 then { failure = "No entries in NIX_PATH match path ${toString topdir}"; }
+          in if lib.length matchingNames == 0 then { failure = "No entries in NIX_PATH match path ${topdir}"; }
           else if lib.length matchingNames == 1 then { success = lib.elemAt matchingNames 0; }
-          else { failure = "Multiple entries in NIX_PATH match path ${toString topdir}"; };
+          else { failure = "Multiple entries in NIX_PATH match path ${topdir}"; };
       };
       ordered = [
         heuristics.chanArgs
