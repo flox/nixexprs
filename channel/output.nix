@@ -88,7 +88,6 @@ let
           superSet = lib.attrByPath paths.canonicalPath null super;
 
           # TODO: recurseIntoAttrs for hydra
-          # TODO: Set dontRecurse for all of these attributes, such that functions aren't recursed into
           set = lib.mapAttrs (name: fun:
             let
               scope' = scope // {
@@ -104,7 +103,16 @@ let
 
           selfSet = lib.getAttrFromPath paths.canonicalPath self.floxInternal.outputs;
           aliases = map (path: lib.setAttrByPath path selfSet) paths.aliases;
-        in [ canonical ] ++ aliases;
+
+          setHydraRecurse = attrPath:
+            if attrPath == [] then {}
+            else {
+              ${lib.head attrPath} = lib.recurseIntoAttrs (setHydraRecurse (lib.tail attrPath));
+            };
+
+          hydraRecursion = setHydraRecurse paths.canonicalPath;
+
+        in [ canonical ] ++ lib.optional paths.recurse hydraRecursion ++ aliases;
 
     in lib.optionalAttrs (funs != {}) (mergeSets (lib.concatMap versionOutput (lib.attrValues spec.versions)));
 

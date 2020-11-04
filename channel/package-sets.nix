@@ -6,12 +6,16 @@ let
   This function turns the attributes of each package set into a structure like
 
     {
-      <version> = {
-        canonicalPath = [ <package> <set> <path> ];
-        aliases = [
-          [ <alias> <one> ]
-          [ <alias> <two> ]
-        ];
+      callScopeAttr = <call scope attr>;
+      versions = {
+        <version> = {
+          recurse = <bool>;
+          canonicalPath = [ <package> <set> <path> ];
+          aliases = [
+            [ <alias> <one> ]
+            [ <alias> <two> ]
+          ];
+        };
       };
     }
   */
@@ -40,6 +44,8 @@ let
           valid = lib.elem canonicalPath paths;
           aliases = lib.remove canonicalPath paths;
           result = {
+            # TODO: Figure out which versions we want to build
+            recurse = true;
             inherit canonicalPath aliases;
           };
         in if valid then result else null;
