@@ -44,9 +44,11 @@ let
           };
         in if valid then result else null;
 
-      annotatedVersionPaths = lib.filterAttrs (version: res: res != null) (lib.mapAttrs annotateVersionPaths versionPaths);
+      versions = lib.filterAttrs (version: res: res != null) (lib.mapAttrs annotateVersionPaths versionPaths);
 
-    in annotatedVersionPaths;
+    in {
+      inherit versions callScopeAttr;
+    };
 
 in {
 
