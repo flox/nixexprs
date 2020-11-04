@@ -55,6 +55,7 @@ let
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
   baseScope = smartMerge (self // self.xorg) self.floxInternal.outputs;
 
+  # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though
   mergeSets = lib.foldl' lib.recursiveUpdate {};
 
   packageSetOutputs = spec:
@@ -77,20 +78,24 @@ let
             }
           ) channelOutputs;
 
-          scope = baseScope // lib.getAttrFromPath paths.canonicalPath baseScope // {
+          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope;
+
+          scope = baseScope // packageSetScope // {
             inherit channels;
             flox = channels.flox or (throw "Attempted to access flox channel from channel ${name}, but no flox channel is present in NIX_PATH");
-            ${spec.callScopeAttr} = lib.getAttrFromPath paths.canonicalPath baseScope;
           };
 
           superSet = lib.attrByPath paths.canonicalPath null super;
 
           # TODO: recurseIntoAttrs for hydra
-
+          # TODO: Set dontRecurse for all of these attributes, such that functions aren't recursed into
           set = lib.mapAttrs (name: fun:
             let
               scope' = scope // {
                 ${name} = superSet.${name};
+                ${spec.callScopeAttr} = packageSetScope // {
+                  ${name} = superSet.${name};
+                };
               };
             in lib.callPackageWith scope' fun {}
           ) funs;
@@ -103,9 +108,25 @@ let
 
     in lib.optionalAttrs (funs != {}) (mergeSets (lib.concatMap versionOutput (lib.attrValues spec.versions)));
 
+  toplevel =
+    let
+      funs = packageSetFuns "pkgs";
+      scope = baseScope // {
+        channels = channelOutputs;
+        flox = channelOutputs.flox or (throw "Attempted to access flox channel from channel ${name}, but no flox channel is present in NIX_PATH");
+      };
+      set = lib.mapAttrs (name: fun:
+        let
+          # TODO:
+          scope' = scope // {
+            ${name} = super.${name};
+          };
+        in lib.callPackageWith scope' fun {}
+      ) funs;
+    in set;
 
 in {
   floxInternal = super.floxInternal // {
-    outputs = mergeSets (map packageSetOutputs (lib.attrValues packageSets));
+    outputs = mergeSets ([ toplevel ] ++ map packageSetOutputs (lib.attrValues packageSets));
   };
 }
