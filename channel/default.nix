@@ -97,6 +97,7 @@ let
     ${name} = myChannelArgs;
   };
 
+  outputFun = import ./output.nix { inherit pkgs; };
 
   # The pkgs set for a specific channel
   channelPkgs = parentChannel: { name, topdir, extraOverlays, args }:
@@ -107,26 +108,15 @@ let
       channelOverlay = self: super: {
         floxInternal = {
           inherit parentChannel args withVerbosity;
-          outputs = {};
-
-          # Merges pkgs and own channel outputs recursively
-          mainScope = lib.recursiveUpdateUntil (path: l: r:
-            let
-              lDrv = lib.isDerivation l;
-              rDrv = lib.isDerivation r;
-            in
-              if lDrv == rDrv then if rDrv then true else ! lib.isAttrs rDrv
-              else throw ("Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
-                + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel")
-          ) self self.floxInternal.outputs // {
-            channels = channels';
-            flox = channels'.flox or (throw "Attempted to access flox channel from channel ${name}, but no flox channel is present in NIX_PATH");
-          };
         };
       };
-      overlays = [ channelOverlay ]
-        ++ lib.optional (builtins.pathExists (topdir + "/pkgs")) (import ./auto/toplevel.nix (topdir + "/pkgs"))
-        ++ extraOverlays;
+      overlays = [
+        channelOverlay
+        (outputFun {
+          inherit topdir;
+          channels = channels';
+        })
+      ] ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 
 
