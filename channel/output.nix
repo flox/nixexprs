@@ -76,7 +76,6 @@ let
             }
           ) channels;
 
-          # TODO: super special thing
           scope = baseScope // lib.getAttrFromPath paths.canonicalPath baseScope // {
             channels = channels';
             flox = channels'.flox or (throw "Attempted to access flox channel from channel ${"TODO"}, but no flox channel is present in NIX_PATH");
