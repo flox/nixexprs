@@ -103,7 +103,7 @@ let
   channelPkgs = parentChannel: { name, topdir, extraOverlays, args }:
     let
 
-      channels' = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
+      channelOutputs = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
 
       channelOverlay = self: super: {
         floxInternal = {
@@ -112,10 +112,7 @@ let
       };
       overlays = [
         channelOverlay
-        (outputFun {
-          inherit topdir;
-          channels = channels';
-        })
+        (outputFun { inherit name topdir channelOutputs; })
       ] ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 

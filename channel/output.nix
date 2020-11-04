@@ -1,16 +1,18 @@
 # Returns the auto-generated output of a channel
-# TODO: In general make sure to not do more evaluations
+# TODO: Add debug logs
 { pkgs }:
 let
   # TODO: Pregenerate a JSON from this
   packageSets = import ./package-sets.nix { inherit pkgs; };
 in
-{ topdir, channels }:
+{ topdir, channelOutputs, name }:
 self: super:
 let
 
   inherit (super) lib;
 
+  # Merges attribute sets recursively, but not recursing into derivations,
+  # and error if a derivation is overridden with a non-derivation, or the other way around
   smartMerge = lib.recursiveUpdateUntil (path: l: r:
     let
       lDrv = lib.isDerivation l;
@@ -50,9 +52,8 @@ let
       result = lib.mapAttrs' importPath (builtins.readDir dir);
     in if exists then result else {};
 
-  # TODO: Maybe also add self.xorg
-  # TODO: Splicing??
-  baseScope = smartMerge self self.floxInternal.outputs;
+  # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
+  baseScope = smartMerge (self // self.xorg) self.floxInternal.outputs;
 
   mergeSets = lib.foldl' lib.recursiveUpdate {};
 
@@ -65,7 +66,7 @@ let
         let
 
           # This maps channels to e.g. have pythonPackages be the correct version
-          channels' = lib.mapAttrs (name: value:
+          channels = lib.mapAttrs (name: value:
             # If the dependent channel has the package set with the correct version,
             let set = lib.attrByPath paths.canonicalPath null value;
             in value // {
@@ -74,11 +75,11 @@ let
                 # maybe TODO: Try out all aliases to see if any of them have a matching version
                 else throw "Channel ${name} did not provide attribute path `${lib.concatStringsSep "." paths.canonicalPath}`";
             }
-          ) channels;
+          ) channelOutputs;
 
           scope = baseScope // lib.getAttrFromPath paths.canonicalPath baseScope // {
-            channels = channels';
-            flox = channels'.flox or (throw "Attempted to access flox channel from channel ${"TODO"}, but no flox channel is present in NIX_PATH");
+            inherit channels;
+            flox = channels.flox or (throw "Attempted to access flox channel from channel ${name}, but no flox channel is present in NIX_PATH");
             ${spec.callScopeAttr} = lib.getAttrFromPath paths.canonicalPath baseScope;
           };
 
