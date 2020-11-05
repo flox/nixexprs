@@ -1,6 +1,7 @@
 # Arguments for the channel file in nixexprs
 { name ? null
 , topdir
+, needsParentChannelAccess ? false
 , extraOverlays ? []
 }@chanArgs:
 # Arguments for the command line
@@ -78,7 +79,7 @@ let
   withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
   myChannelArgs = {
-    inherit name topdir extraOverlays args;
+    inherit name needsParentChannelAccess topdir extraOverlays args;
   };
 
   # Mapping from channel name to a path to its nixexprs root
@@ -109,14 +110,17 @@ let
   outputFun = import ./output.nix { inherit pkgs; };
 
   # The pkgs set for a specific channel
-  channelPkgs = parentChannel: { name, topdir, extraOverlays, args }:
+  channelPkgs = parentChannel: { name, needsParentChannelAccess, topdir, extraOverlays, args }:
     let
 
       channelOutputs = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
 
       channelOverlay = self: super: {
         floxInternal = {
-          inherit parentChannel args withVerbosity;
+          parentChannel =
+            if needsParentChannelAccess then parentChannel
+            else throw "Channel \"${name}\" tried to access `floxInternal.parentChannel`, but this is not allowed by default. To allow this, set\n  needsParentChannelAccess = true\nin the `default.nix` of channel \"${name}\"";
+          inherit args withVerbosity;
         };
       };
       overlays = [
@@ -125,10 +129,17 @@ let
       ] ++ extraOverlays;
     in pkgs.appendOverlays overlays;
 
+  parentIndependentChannels = lib.mapAttrs (_: args:
+    channelPkgs null args
+  ) channelArgs;
 
   channels = lib.mapAttrs (parent: _:
-    lib.mapAttrs (_: args:
-      channelPkgs parent args
+    lib.mapAttrs (name: args:
+      # If the channel to import doesn't require access to the parent channel,
+      # don't reimport it again, just use the shared one from the parentIndependentChannel mapping
+      if args.needsParentChannelAccess
+      then channelPkgs parent args
+      else parentIndependentChannels.${name}
     ) channelArgs
   ) channelArgs;
 
