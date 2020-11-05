@@ -1,6 +1,6 @@
 # Returns the auto-generated output of a channel
 # TODO: Add debug logs
-{ pkgs }:
+{ pkgs, withVerbosity }:
 let
   # TODO: Pregenerate a JSON from this
   packageSets = import ./package-sets.nix { inherit pkgs; };
@@ -17,20 +17,21 @@ let
     let
       lDrv = lib.isDerivation l;
       rDrv = lib.isDerivation r;
+      prettyPath = lib.concatStringsSep "." path;
       error = "Trying to override ${lib.optionalString (!lDrv) "non-"}derivation in nixpkgs"
         + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
     in
       if lDrv == rDrv then
         # If both sides are derivations, override completely
-        if rDrv then true
+        if rDrv then withVerbosity 7 (builtins.trace "[channel ${name}] [smartMergePath ${prettyPath}] Overriding because both sides are derivations") true
         # If both sides are attribute sets, merge recursively
-        else if lib.isAttrs l && lib.isAttrs r then false
+        else if lib.isAttrs l && lib.isAttrs r then withVerbosity 7 (builtins.trace "[channel ${name}] [smartMergePath ${prettyPath}] Recursing because both sides are attribute sets") false
         # Otherwise, override completely
-        else true
+        else withVerbosity 7 (builtins.trace "[channel ${name}] [smartMergePath ${prettyPath}] Overriding because left is ${builtins.typeOf l} and right is ${builtins.typeOf r}") true
       else throw error);
 
   # Imports all directories and files in a subpath and returns a mapping from <name> to <expression>
-  packageSetFuns = subpath:
+  packageSetFuns = setName: subpath:
     let
       dir = topdir + "/${subpath}";
       exists = builtins.pathExists dir;
@@ -50,7 +51,12 @@ let
       # Mapping from <package name> -> <package fun>
       # This caches the imports of the auto-called package files, such that they don't need to be imported for every version separately
       result = lib.mapAttrs' importPath (builtins.readDir dir);
-    in if exists then result else {};
+
+      message = "[channel ${name}] [packageSet ${setName}] Importing all Nix expressions from directory \"${toString dir}\"" + withVerbosity 6 (_: ". Attributes: ${toString (lib.attrNames result)}") "";
+    in
+      if exists
+      then withVerbosity 4 (builtins.trace message) result
+      else withVerbosity 5 (builtins.trace "[channel ${name}] [packageSet ${setName}] Not importing any Nix expressions because `${toString dir}` does not exist") {};
 
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
   baseScope = smartMerge (self // self.xorg) self.floxInternal.outputs;
@@ -58,12 +64,12 @@ let
   # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though
   mergeSets = lib.foldl' lib.recursiveUpdate {};
 
-  packageSetOutputs = spec:
+  packageSetOutputs = setName: spec:
     let
 
-      funs = packageSetFuns spec.callScopeAttr;
+      funs = packageSetFuns setName spec.callScopeAttr;
 
-      versionOutput = paths:
+      versionOutput = version: paths:
         let
 
           # This maps channels to e.g. have pythonPackages be the correct version
@@ -88,15 +94,16 @@ let
           superSet = lib.attrByPath paths.canonicalPath null super;
 
           # TODO: recurseIntoAttrs for hydra
-          set = lib.mapAttrs (name: fun:
+          set = lib.mapAttrs (pname: fun:
             let
               scope' = scope // {
-                ${name} = superSet.${name};
+                ${pname} = superSet.${pname};
                 ${spec.callScopeAttr} = packageSetScope // {
-                  ${name} = superSet.${name};
+                  ${pname} = superSet.${pname};
                 };
               };
-            in lib.callPackageWith scope' fun {}
+            in withVerbosity 8 (builtins.trace "[channel ${name}] [packageSet ${setName}] [version ${version}] Auto-calling package ${pname}")
+              (lib.callPackageWith scope' fun {})
           ) funs;
 
           canonical = lib.setAttrByPath paths.canonicalPath set;
@@ -114,27 +121,28 @@ let
 
         in [ canonical ] ++ lib.optional paths.recurse hydraRecursion ++ aliases;
 
-    in lib.optionalAttrs (funs != {}) (mergeSets (lib.concatMap versionOutput (lib.attrValues spec.versions)));
+    in lib.optionalAttrs (funs != {}) (mergeSets (lib.concatLists (lib.attrValues (lib.mapAttrs versionOutput spec.versions))));
 
   toplevel =
     let
-      funs = packageSetFuns "pkgs";
+      funs = packageSetFuns "toplevel" "pkgs";
       scope = baseScope // {
         channels = channelOutputs;
         flox = channelOutputs.flox or (throw "Attempted to access flox channel from channel ${name}, but no flox channel is present in NIX_PATH");
       };
-      set = lib.mapAttrs (name: fun:
+      set = lib.mapAttrs (pname: fun:
         let
           # TODO:
           scope' = scope // {
-            ${name} = super.${name};
+            ${pname} = super.${pname};
           };
-        in lib.callPackageWith scope' fun {}
+        in withVerbosity 8 (builtins.trace "[channel ${name}] [packageSet toplevel] Auto-calling package ${pname}")
+          (lib.callPackageWith scope' fun {})
       ) funs;
     in set;
 
 in {
   floxInternal = super.floxInternal // {
-    outputs = mergeSets ([ toplevel ] ++ map packageSetOutputs (lib.attrValues packageSets));
+    outputs = mergeSets ([ toplevel ] ++ lib.attrValues (lib.mapAttrs packageSetOutputs packageSets));
   };
 }

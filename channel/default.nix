@@ -4,6 +4,7 @@
 , needsParentChannelAccess ? false
 , extraOverlays ? []
 }@chanArgs:
+
 # Arguments for the command line
 { name ? null
 , debugVerbosity ? 0
@@ -24,6 +25,8 @@ let
   # also used as a base set for all channels themselves
   pkgs = import <nixpkgs> { inherit system; };
   inherit (pkgs) lib;
+
+  withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
 
   # A list of { name; success | failure } entries, representing heuristics used
   # to determine the channel name, in the order of preference
@@ -75,9 +78,7 @@ let
     let
       fallback = { name = "fallback"; success = lib.warn fallbackNameWarning "_unknown"; };
       firstSuccess = lib.findFirst (e: e ? success) fallback nameHeuristics;
-    in withVerbosity 2 (builtins.trace "Determined channel name to be \"${firstSuccess.success}\" with heuristic ${firstSuccess.name}") firstSuccess.success;
-
-  withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
+    in withVerbosity 2 (builtins.trace "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}") firstSuccess.success;
 
   myChannelArgs = {
     inherit name needsParentChannelAccess topdir extraOverlays args;
@@ -101,14 +102,14 @@ let
     in withVerbosity 1 (builtins.trace "Found these channel-like entries in NIX_PATH: ${toString (lib.attrNames result)}") result;
 
   importChannelSrc = name: src: withVerbosity 1
-    (builtins.trace "Importing channel `${name}` from `${toString src}`")
+    (builtins.trace "[channel ${name}] Importing from `${toString src}`")
     (import src { inherit name; return = "channelArguments"; });
 
   channelArgs = lib.mapAttrs importChannelSrc channelNixexprs // {
     ${name} = myChannelArgs;
   };
 
-  outputFun = import ./output.nix { inherit pkgs; };
+  outputFun = import ./output.nix { inherit pkgs withVerbosity; };
 
   # The pkgs set for a specific channel
   channelPkgs = parentChannel: { name, needsParentChannelAccess, topdir, extraOverlays, args }:
@@ -128,7 +129,7 @@ let
         channelOverlay
         (outputFun { inherit name topdir channelOutputs; })
       ] ++ extraOverlays;
-    in pkgs.appendOverlays overlays;
+    in withVerbosity 3 (builtins.trace ("[channel ${name}] Evaluating" + lib.optionalString needsParentChannelAccess " with parent channel ${parentChannel}")) (pkgs.appendOverlays overlays);
 
   parentIndependentChannels = lib.mapAttrs (_: args:
     channelPkgs null args
