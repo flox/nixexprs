@@ -5,17 +5,19 @@ in
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --arg srcpath <path>,
 # so that needs to take precedence over all other sources of src.
-project: override:
+channel:
+project:
+override:
   let
     srcs =
-      if floxInternal.parentChannel == "_unknown"
+      if channel == "_unknown"
       then throw "Could not find source for project \"${project}\" because the channel name is unknown."
-      else builtins.findFile builtins.nixPath "${floxInternal.parentChannel}-meta/srcs";
+      else builtins.findFile builtins.nixPath "${channel}-meta/srcs";
 
     s = args.srcpath or "";
     _srcs_json_ = srcs + "/${project}.json";
     revdata = if builtins.pathExists _srcs_json_ then lib.importJSON _srcs_json_
-      else throw "Could not find source for project \"${project}\" in channel \"${floxInternal.parentChannel}\". Are webhooks for that repository set up?";
+      else throw "Could not find source for project \"${project}\" in channel \"${channel}\". Are webhooks for that repository set up?";
     _latest_ = revdata.latest;
     _srcs_ = revdata.srcs;
 

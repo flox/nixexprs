@@ -3,7 +3,7 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ python, pythonPackages, setSrcVersion }:
+{ python, pythonPackages, getSource, floxInternal }:
 
 # Arguments provided to flox.mkDerivation()
 { project	# the name of the project, required
@@ -19,7 +19,7 @@ builtins.trace (
 
 # Actually create the derivation.
 pythonPackages.buildPythonApplication ( args // {
-  inherit (setSrcVersion project args) version src pname src_json;
+  inherit (getSource floxInternal.parentChannel project args) version src pname src_json;
   # Add tools for development environment only.
   nativeBuildInputs = nativeBuildInputs ++ [
     pythonPackages.ipython
