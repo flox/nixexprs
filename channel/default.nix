@@ -11,6 +11,7 @@
 , srcpath ? ""
 , manifest_json ? ""
 , manifest ? ""
+, system ? builtins.currentSystem
 }@args:
 let
   topdir' = topdir;
@@ -21,7 +22,7 @@ let
 
   # We only import nixpkgs once with an overlay that adds all channels, which is
   # also used as a base set for all channels themselves
-  pkgs = import <nixpkgs> {};
+  pkgs = import <nixpkgs> { inherit system; };
   inherit (pkgs) lib;
 
   # A list of { name; success | failure } entries, representing heuristics used
