@@ -7,7 +7,10 @@ in
 # so that needs to take precedence over all other sources of src.
 project: override:
   let
-    srcs = builtins.findFile builtins.nixPath "${floxInternal.parentChannel}-meta/srcs";
+    srcs =
+      if floxInternal.parentChannel == "_unknown"
+      then throw "Could not find source for project \"${project}\" because the channel name is unknown."
+      else builtins.findFile builtins.nixPath "${floxInternal.parentChannel}-meta/srcs";
 
     s = args.srcpath or "";
     _srcs_json_ = srcs + "/${project}.json";

@@ -27,7 +27,16 @@ let
   # to determine the channel name, in the order of preference
   nameHeuristics =
     let
-      heuristics = lib.mapAttrs (name: value: value // { inherit name; }) {
+      f = name: value:
+        let
+          result =
+            if value ? success then
+              if channelNixexprs ? ${value.success} then value
+              else { failure = "Found channel name ${value.success}, but no entry for this channel found in NIX_PATH"; }
+            else value;
+        in result // { inherit name; };
+
+      heuristics = lib.mapAttrs f {
         chanArgs = if chanArgs ? name then { success = chanArgs.name; } else { failure = "No \"name\" defined in the nixexprs default.nix"; };
         cmdArgs = if args ? name then { success = args.name; } else { failure = "No \"name\" passed with `--argstr name <channel name>`"; };
         baseName =
@@ -56,13 +65,13 @@ let
   fallbackNameWarning = ''
     Channel name could not be inferred because all heuristics failed:
     ${lib.concatMapStringsSep "\n" (h: "- ${h.name}: ${h.failure}") nameHeuristics}
-    Using channel name "unknown" instead. Because of this, channels dependent on your channel won't use your local uncommitted changes
+    Using channel name "_unknown" instead. Because of this, channels dependent on your channel won't use your local uncommitted changes, and you will get failures if attempting to use sources from this channel.
   '';
 
   # The name as determined by the first successful name heuristic
   name =
     let
-      fallback = { name = "fallback"; success = lib.warn fallbackNameWarning "unknown"; };
+      fallback = { name = "fallback"; success = lib.warn fallbackNameWarning "_unknown"; };
       firstSuccess = lib.findFirst (e: e ? success) fallback nameHeuristics;
     in withVerbosity 2 (builtins.trace "Determined channel name to be \"${firstSuccess.success}\" with heuristic ${firstSuccess.name}") firstSuccess.success;
 
