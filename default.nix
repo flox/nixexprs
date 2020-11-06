@@ -1,4 +1,4 @@
 import <flox/channel> {
   topdir = ./.;
-  needsParentChannelAccess = true;
+  requiresImportingChannelArgs = true;
 }

@@ -19,7 +19,7 @@ builtins.trace (
 
 # Actually create the derivation.
 pythonPackages.buildPythonApplication ( args // {
-  inherit (getSource floxInternal.parentChannel project args) version src pname src_json;
+  inherit (getSource floxInternal.importingChannelArgs.name project args) version src pname src_json;
   # Add tools for development environment only.
   nativeBuildInputs = nativeBuildInputs ++ [
     pythonPackages.ipython

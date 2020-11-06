@@ -1,7 +1,7 @@
 # Arguments for the channel file in nixexprs
 { name ? null
 , topdir
-, needsParentChannelAccess ? false
+, requiresImportingChannelArgs ? false
 , extraOverlays ? []
 }@chanArgs:
 
@@ -81,7 +81,7 @@ let
     in withVerbosity 2 (builtins.trace "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}") firstSuccess.success;
 
   myChannelArgs = {
-    inherit name needsParentChannelAccess topdir extraOverlays args;
+    inherit name requiresImportingChannelArgs topdir extraOverlays args;
   };
 
   # Mapping from channel name to a path to its nixexprs root
@@ -112,16 +112,16 @@ let
   outputFun = import ./output.nix { inherit pkgs withVerbosity; };
 
   # The pkgs set for a specific channel
-  channelPkgs = parentChannel: { name, needsParentChannelAccess, topdir, extraOverlays, args }:
+  channelPkgs = importingChannelArgs: { name, requiresImportingChannelArgs, topdir, extraOverlays, args }:
     let
 
       channelOutputs = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
 
       channelOverlay = self: super: {
         floxInternal = {
-          parentChannel =
-            if needsParentChannelAccess then parentChannel
-            else throw "Channel \"${name}\" tried to access `floxInternal.parentChannel`, but this is not allowed by default. To allow this, set\n  needsParentChannelAccess = true\nin the `default.nix` of channel \"${name}\"";
+          importingChannelArgs =
+            if requiresImportingChannelArgs then importingChannelArgs
+            else throw "Channel \"${name}\" tried to access `floxInternal.importingChannelArgs`, but this is not allowed by default. To allow this, set\n  requiresImportingChannelArgs = true\nin the `default.nix` of channel \"${name}\"";
           inherit args withVerbosity;
         };
       };
@@ -129,19 +129,19 @@ let
         channelOverlay
         (outputFun { inherit name topdir channelOutputs; })
       ] ++ extraOverlays;
-    in withVerbosity 3 (builtins.trace ("[channel ${name}] Evaluating" + lib.optionalString needsParentChannelAccess " with parent channel ${parentChannel}")) (pkgs.appendOverlays overlays);
+    in withVerbosity 3 (builtins.trace ("[channel ${name}] Evaluating" + lib.optionalString requiresImportingChannelArgs ", being imported from ${importingChannelArgs.name}")) (pkgs.appendOverlays overlays);
 
-  parentIndependentChannels = lib.mapAttrs (_: args:
-    channelPkgs null args
+  independentChannels = lib.mapAttrs (_: args:
+    channelPkgs {} args
   ) channelArgs;
 
-  channels = lib.mapAttrs (parent: _:
+  channels = lib.mapAttrs (_: importingChannelArgs:
     lib.mapAttrs (name: args:
-      # If the channel to import doesn't require access to the parent channel,
-      # don't reimport it again, just use the shared one from the parentIndependentChannel mapping
-      if args.needsParentChannelAccess
-      then channelPkgs parent args
-      else parentIndependentChannels.${name}
+      # If the channel to import doesn't require access to the importing channel,
+      # don't reimport it again, just use the shared one from the independentChannel mapping
+      if args.requiresImportingChannelArgs
+      then channelPkgs importingChannelArgs args
+      else independentChannels.${name}
     ) channelArgs
   ) channelArgs;
 

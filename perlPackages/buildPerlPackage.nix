@@ -11,7 +11,7 @@
 
 # Actually create the derivation.
 buildPerlPackage ( args // {
-  inherit (getSource floxInternal.parentChannel project args) version src pname src_json;
+  inherit (getSource floxInternal.importingChannelArgs.name project args) version src pname src_json;
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''

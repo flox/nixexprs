@@ -10,7 +10,7 @@
 
 # Actually create the derivation.
 stdenv.mkDerivation ( args // {
-  inherit (getSource floxInternal.parentChannel project args) version src name;
+  inherit (getSource floxInternal.importingChannelArgs.name project args) version src name;
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''

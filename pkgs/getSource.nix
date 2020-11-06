@@ -1,6 +1,6 @@
 { floxInternal, lib, fetchgit }:
 let
-  inherit (floxInternal) args;
+  inherit (floxInternal.importingChannelArgs) args;
 in
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --arg srcpath <path>,

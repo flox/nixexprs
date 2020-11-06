@@ -11,7 +11,7 @@
 
 # Actually create the derivation.
 buildGoPackage ( args // rec {
-  inherit (getSource floxInternal.parentChannel project args) version autoversion src name src_json;
+  inherit (getSource floxInternal.importingChannelArgs.name project args) version autoversion src name src_json;
 
   # Go development in Nix at flox follows the convention of injecting the
   # version string at build time using ldflags. Nix will deduce the version for
