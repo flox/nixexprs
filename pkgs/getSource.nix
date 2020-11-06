@@ -61,20 +61,7 @@ override:
   in rec {
     inherit project origversion autoversion;
     _src = if s == "" then (override.src or autosrc) else s;
-
-    # Filter source if applicable, providing manifest in following ways:
-    #
-    # 1) by passing a (valid) manifest_json variable to evaluation
-    # 2) by passing a (valid) manifest variable to evaluation
-    #
-    src =
-      let
-        _manifest_json = builtins.toPath args.manifest_json or "";
-        _manifest = builtins.toPath args.manifest or "";
-      in
-        if args.manifest_json or "" == "" then (
-          if args.manifest or "" == "" then _src else lib.sourceFilesByManifestFile _src _manifest
-        ) else lib.sourceFilesByManifestJsonFile _src _manifest_json;
+    src = if s == "" then _src else builtins.fetchGit s;
 
     version = if s == "" then autoversion else "manual";
     pname = (override.pname or project);

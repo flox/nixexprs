@@ -10,8 +10,6 @@
 , debugVerbosity ? 0
 , return ? "outputs"
 , srcpath ? ""
-, manifest_json ? ""
-, manifest ? ""
 , system ? builtins.currentSystem
 }@args:
 let
