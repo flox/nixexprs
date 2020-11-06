@@ -44,13 +44,12 @@ let
           regular =
             if lib.hasSuffix ".nix" name
             then lib.nameValuePair (lib.removeSuffix ".nix" name) (import (dir + "/${name}"))
-            else throw "Can't auto-call non-Nix file ${toString (dir + "/${name}")}. "
-              + "If non-Nix files are needed for a package, move the package into its own directory and use a default.nix file for the Nix expression";
+            else null;
         }.${type} or (throw "Can't auto-call file type ${type}");
 
       # Mapping from <package name> -> <package fun>
       # This caches the imports of the auto-called package files, such that they don't need to be imported for every version separately
-      result = lib.mapAttrs' importPath (builtins.readDir dir);
+      result = lib.listToAttrs (lib.filter (v: v != null) (lib.attrValues (lib.mapAttrs importPath (builtins.readDir dir))));
 
       message = "[channel ${name}] [packageSet ${setName}] Importing all Nix expressions from directory \"${toString dir}\"" + withVerbosity 6 (_: ". Attributes: ${toString (lib.attrNames result)}") "";
     in
