@@ -25,7 +25,7 @@ let
 
       check = file: lib.optionalString (builtins.pathExists (path + "/${file}")) ''
         while read -r line; do
-          if ! grep -xF "$line" ${file} >/dev/null; then
+          if ! grep -xF "$line" ${file} >/dev/null && ! grep -x "$line" ${file} >/dev/null; then
             echo "Expected ${file} to contain line"
             echo "$line"
             echo "But it doesn't"
@@ -38,8 +38,8 @@ let
     in pkgs.runCommandNoCC "nixexprs-test-${baseNameOf path}" {
       nativeBuildInputs = [ pkgs.nix ];
     } ''
-      root=$(mktemp -d)
-      export NIX_STATE_DIR=$root/var/nix
+      root=$PWD/root
+      export NIX_REMOTE=local?root=$PWD/root
       export NIX_PATH=${nixPath}
 
       fail() {
@@ -51,8 +51,10 @@ let
       }
 
       echo "NIX_PATH=${nixPath} nix-instantiate ${args}"
+      set +e
       NIX_PATH=${nixPath} nix-instantiate ${args} >stdout 2>stderr
       exitCode=$?
+      set -e
       if [[ "$exitCode" -ne "${toString config.exitCode}" ]]; then
         echo "Expected exit code ${toString config.exitCode} but got $exitCode"
         fail
