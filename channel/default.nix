@@ -35,7 +35,9 @@ let
           result =
             if value ? success then
               if channelNixexprs ? ${value.success} then value
-              else lib.warn "Inferred channel name ${value.success} using heuristic ${name}, but no entry for this channel found in NIX_PATH" value
+              else {
+                success = lib.warn "Inferred channel name ${value.success} using heuristic ${name}, but no entry for this channel found in NIX_PATH" value.success;
+              }
             else value;
         in result // { inherit name; };
 
