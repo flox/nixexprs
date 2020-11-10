@@ -25,7 +25,7 @@ let
 
       check = file: lib.optionalString (builtins.pathExists (path + "/${file}")) ''
         while read -r line; do
-          if ! grep -xF "$line" ${file} >/dev/null && ! grep -x "$line" ${file} >/dev/null; then
+          if ! grep -xF -e "$line" ${file} >/dev/null && ! grep -x -e "$line" ${file} >/dev/null; then
             echo "Expected ${file} to contain line"
             echo "$line"
             echo "But it doesn't"
@@ -65,8 +65,7 @@ let
       touch $out
     '';
 
-in {
-  trivial = testRunner ./trivial;
-  one-package = testRunner ./one-package;
-  dep-override = testRunner ./dep-override;
-}
+  result = lib.mapAttrs (name: value: testRunner (./. + "/${name}"))
+    (lib.filterAttrs (name: type: type == "directory") (builtins.readDir ./.));
+
+in result
