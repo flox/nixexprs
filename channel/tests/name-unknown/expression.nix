@@ -1,0 +1,2 @@
+{ dir }:
+import dir {}
