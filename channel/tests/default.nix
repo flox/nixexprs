@@ -67,4 +67,5 @@ let
 
 in {
   trivial = testRunner ./trivial;
+  one-package = testRunner ./one-package;
 }
