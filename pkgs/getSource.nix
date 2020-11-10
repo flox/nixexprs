@@ -76,7 +76,6 @@ override:
     ) else (
       builtins.toJSON {
         inherit project src version pname name;
-        time = builtins.currentTime;
         system = builtins.currentSystem;
       }
     );
