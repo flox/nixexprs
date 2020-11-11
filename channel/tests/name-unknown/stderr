@@ -1,0 +1,7 @@
+trace: warning: Channel name could not be inferred because all heuristics failed:
+- chanArgs: No "name" defined in the nixexprs default.nix
+- cmdArgs: No "name" passed with `--argstr name <channel name>`
+- nixPath: No entries in NIX_PATH match path /nix/store/.*-test
+- baseName: topdir is in /nix/store, basename is nonsensical
+- gitConfig: Path /nix/store/.*-test/.git/config does not exist
+Using channel name "_unknown" instead. Because of this, channels dependent on your channel won't use your local uncommitted changes, and you will get failures if attempting to use sources from this channel.

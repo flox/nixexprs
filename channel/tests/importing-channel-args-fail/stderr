@@ -1,0 +1,3 @@
+error: Channel "test" tried to access `floxInternal.importingChannelArgs`, but this is not allowed by default. To allow this, set
+  requiresImportingChannelArgs = true
+in the `default.nix` of channel "test"
