@@ -1,0 +1,3 @@
+{ black }: {
+  result = black.name;
+}

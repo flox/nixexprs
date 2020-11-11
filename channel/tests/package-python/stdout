@@ -1,0 +1,1 @@
+{ python27Packages = "python-2.7.18"; python2Packages = "python-2.7.18"; python310Packages = "python3-3.10.0a1"; python36Packages = "python3-3.6.12"; python37Packages = "python3-3.7.9"; python38Packages = "python3-3.8.6"; python39Packages = "python3-3.9.0"; python3Packages = "python3-3.8.6"; pythonPackages = "python-2.7.18"; }
