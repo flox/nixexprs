@@ -1,0 +1,1 @@
+{}: { path = "channels/foo"; }
