@@ -16,7 +16,8 @@ let
 
   testRunner = path:
     let
-      config = import (path + "/config.nix");
+      config' = import (path + "/config.nix");
+      config = if lib.isFunction config' then config' { inherit pkgs; } else config';
       nixPath = createNixPath (config.nixPath {
         nixpkgs = nixpkgs;
         flox = ../..;
