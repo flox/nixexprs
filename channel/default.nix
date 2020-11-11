@@ -11,6 +11,8 @@
 , return ? "outputs"
 , srcpath ? ""
 , system ? builtins.currentSystem
+# Used to detect whether this default.nix is a channel (by inspecting function arguments)
+, isFloxChannel ? throw "This argument isn't meant to be accessed"
 }@args:
 let
   topdir' = topdir;
@@ -84,26 +86,35 @@ let
     inherit name requiresImportingChannelArgs topdir extraOverlays args;
   };
 
-  # Mapping from channel name to a path to its nixexprs root
+  # Mapping from channel name to the value at its default.nix
   # Search through both prefixed and non-prefixed paths in NIX_PATH
   channelNixexprs =
     let
       expandEntry = e:
         if e.prefix != "" then [{
           name = e.prefix;
-          value = e.path;
+          path = e.path;
         }]
         # TODO: Change flox wrapper to do this expansion
         else lib.mapAttrsToList (name: type: {
           inherit name;
-          value = e.path + "/${name}";
+          path = e.path + "/${name}";
         }) (builtins.readDir e.path);
-      result = lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
+
+      pathEntries = lib.concatMap expandEntry builtins.nixPath;
+      exprEntries = map (e: e // { value = import e.path; }) (lib.filter (e: builtins.pathExists (e.path + "/default.nix")) pathEntries);
+      channelEntries = lib.filter (e:
+        let
+          isFloxChannel = lib.isFunction e.value && (lib.functionArgs e.value) ? isFloxChannel;
+          result = if isFloxChannel
+            then withVerbosity 1 (builtins.trace "[channel ${e.name}] Importing from `${toString e.path}`") isFloxChannel
+            else withVerbosity 3 (builtins.trace "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${lib.generators.toPretty {} e.value}), ignoring this entry") isFloxChannel;
+        in result
+      ) exprEntries;
+      result = lib.listToAttrs channelEntries;
     in withVerbosity 1 (builtins.trace "Found these channel-like entries in NIX_PATH: ${toString (lib.attrNames result)}") result;
 
-  importChannelSrc = name: src: withVerbosity 1
-    (builtins.trace "[channel ${name}] Importing from `${toString src}`")
-    (import src { inherit name; return = "channelArguments"; });
+  importChannelSrc = name: fun: fun { inherit name; return = "channelArguments"; };
 
   channelArgs = lib.mapAttrs importChannelSrc channelNixexprs // {
     ${name} = myChannelArgs;
@@ -135,7 +146,7 @@ let
     channelPkgs {} args
   ) channelArgs;
 
-  channels = lib.mapAttrs (_: importingChannelArgs:
+  channels = lib.mapAttrs (parentName: importingChannelArgs:
     lib.mapAttrs (name: args:
       # If the channel to import doesn't require access to the importing channel,
       # don't reimport it again, just use the shared one from the independentChannel mapping
