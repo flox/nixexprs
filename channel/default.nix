@@ -53,8 +53,8 @@ let
         gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
         nixPath =
           let
-            matchingEntries = lib.filterAttrs (name: path: path == topdir) channelNixexprs;
-            matchingNames = lib.unique (lib.attrNames matchingEntries);
+            matchingEntries = lib.filter (e: e.path == topdir) channelNixexprsList;
+            matchingNames = lib.unique (map (e: e.name) matchingEntries);
           in if lib.length matchingNames == 0 then { failure = "No entries in NIX_PATH match path ${topdir}"; }
           else if lib.length matchingNames == 1 then { success = lib.elemAt matchingNames 0; }
           else { failure = "Multiple entries in NIX_PATH match path ${topdir}"; };
@@ -86,9 +86,9 @@ let
     inherit name requiresImportingChannelArgs topdir extraOverlays args;
   };
 
-  # Mapping from channel name to the value at its default.nix
-  # Search through both prefixed and non-prefixed paths in NIX_PATH
-  channelNixexprs =
+  # List of { name, path, value } entries of channels found in NIX_PATH
+  # Searches through both prefixed and non-prefixed paths in NIX_PATH
+  channelNixexprsList =
     let
       expandEntry = e:
         if e.prefix != "" then [{
@@ -111,8 +111,9 @@ let
             else withVerbosity 3 (builtins.trace "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${lib.generators.toPretty {} e.value}), ignoring this entry") isFloxChannel;
         in result
       ) exprEntries;
-      result = lib.listToAttrs channelEntries;
-    in withVerbosity 1 (builtins.trace "Found these channel-like entries in NIX_PATH: ${toString (lib.attrNames result)}") result;
+    in withVerbosity 1 (builtins.trace "Found these channel-like entries in NIX_PATH: ${toString (map (e: e.name) channelEntries)}") channelEntries;
+
+  channelNixexprs = lib.listToAttrs channelNixexprsList;
 
   importChannelSrc = name: fun: fun { inherit name; return = "channelArguments"; };
 
