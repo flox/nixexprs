@@ -24,7 +24,7 @@ let
       args = lib.escapeShellArgs (map (arg: "${arg}") config.args);
 
       check = file: lib.optionalString (builtins.pathExists (path + "/${file}")) ''
-        while read -r line; do
+        while IFS="" read -r line || [[ -n $line ]]; do
           if ! grep -xF -e "$line" ${file} >/dev/null && ! grep -x -e "$line" ${file} >/dev/null; then
             echo "Expected ${file} to contain line"
             echo "$line"
