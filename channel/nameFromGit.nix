@@ -55,7 +55,7 @@ let
       remotes = lib.attrValues (sections.remote or {});
 
       parseNixexprsUrl = remote:
-        let m = builtins.match ".*github.com[:/](.*)/nixexprs.*" (remote.url or "");
+        let m = builtins.match ".*github.com[:/](.*)/nixexprs(\\.git)?" (remote.url or "");
         in if m == null then m else lib.elemAt m 0;
 
     in lib.unique (lib.filter (m: m != null) (map parseNixexprsUrl remotes));
