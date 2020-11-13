@@ -37,7 +37,7 @@ let
       '';
 
     in pkgs.runCommandNoCC "nixexprs-test-${baseNameOf path}" {
-      nativeBuildInputs = [ pkgs.nix ];
+      nativeBuildInputs = [ pkgs.nix pkgs.gitMinimal ];
     } ''
       root=$PWD/root
       export NIX_REMOTE=local?root=$PWD/root
