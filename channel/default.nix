@@ -121,45 +121,11 @@ let
     ${name} = myChannelArgs;
   };
 
-  outputFun = import ./output.nix { inherit pkgs withVerbosity; };
+  outputFun = import ./output.nix { inherit outputFun channelArgs pkgs withVerbosity; };
 
-  # The pkgs set for a specific channel
-  channelPkgs = importingChannelArgs: { name, requiresImportingChannelArgs, topdir, extraOverlays, args }:
-    let
-
-      channelOutputs = lib.mapAttrs (name: value: value.floxInternal.outputs) channels.${name};
-
-      channelOverlay = self: super: {
-        floxInternal = {
-          importingChannelArgs =
-            if requiresImportingChannelArgs then importingChannelArgs
-            else throw "Channel \"${name}\" tried to access `floxInternal.importingChannelArgs`, but this is not allowed by default. To allow this, set\n  requiresImportingChannelArgs = true\nin the `default.nix` of channel \"${name}\"";
-          inherit args withVerbosity;
-        };
-      };
-      overlays = [
-        channelOverlay
-        (outputFun { inherit name topdir channelOutputs; })
-      ] ++ extraOverlays;
-    in withVerbosity 3 (builtins.trace ("[channel ${name}] Evaluating" + lib.optionalString requiresImportingChannelArgs ", being imported from ${importingChannelArgs.name}")) (pkgs.appendOverlays overlays);
-
-  independentChannels = lib.mapAttrs (_: args:
-    channelPkgs {} args
-  ) channelArgs;
-
-  channels = lib.mapAttrs (parentName: importingChannelArgs:
-    lib.mapAttrs (name: args:
-      # If the channel to import doesn't require access to the importing channel,
-      # don't reimport it again, just use the shared one from the independentChannel mapping
-      if args.requiresImportingChannelArgs
-      then channelPkgs importingChannelArgs args
-      else independentChannels.${name}
-    ) channelArgs
-  ) channelArgs;
-
-  outputs = channels.${name}.${name}.floxInternal.outputs;
+  outputs = lib.mapAttrs (name: args: outputFun [] args args) channelArgs;
 
 in {
-  inherit outputs;
+  outputs = outputs.${name};
   channelArguments = myChannelArgs;
 }.${return}
