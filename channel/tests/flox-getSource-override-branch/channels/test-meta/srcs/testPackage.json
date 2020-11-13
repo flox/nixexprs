@@ -1,0 +1,44 @@
+{
+  "branches": {
+    "master": "431a6b2b34cfb79aa0c4b985fa500bc68f442c23",
+    "alt": "009502ad3b0d0506a1c7ada52f3f67129d281c3a"
+  },
+  "srcs": {
+    "783f71ba9565ed912473812c5781f0a623b22fa9": {
+      "url": "repo",
+      "rev": "783f71ba9565ed912473812c5781f0a623b22fa9",
+      "date": "2020-11-13T14:50:20+01:00",
+      "path": "/nix/store/9ljssglw74jabzzsqsl3lim4d5jgh4ya-empty",
+      "sha256": "0sjjj9z1dhilhpc8pq4154czrb79z9cm044jvn75kxcjv6v5l2m5",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.13",
+      "revision": 1
+    },
+    "431a6b2b34cfb79aa0c4b985fa500bc68f442c23": {
+      "url": "repo",
+      "rev": "431a6b2b34cfb79aa0c4b985fa500bc68f442c23",
+      "date": "2020-11-13T14:52:06+01:00",
+      "path": "/nix/store/9ljssglw74jabzzsqsl3lim4d5jgh4ya-empty",
+      "sha256": "0sjjj9z1dhilhpc8pq4154czrb79z9cm044jvn75kxcjv6v5l2m5",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.13",
+      "revision": 2
+    },
+    "009502ad3b0d0506a1c7ada52f3f67129d281c3a": {
+      "url": "repo",
+      "rev": "009502ad3b0d0506a1c7ada52f3f67129d281c3a",
+      "date": "2020-11-13T14:57:43+01:00",
+      "path": "/nix/store/9ljssglw74jabzzsqsl3lim4d5jgh4ya-empty",
+      "sha256": "0sjjj9z1dhilhpc8pq4154czrb79z9cm044jvn75kxcjv6v5l2m5",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.13",
+      "revision": 3
+    }
+  }
+}
