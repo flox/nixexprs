@@ -1,7 +1,6 @@
 # Arguments for the channel file in nixexprs
 { name ? null
 , topdir
-, requiresImportingChannelArgs ? false
 , extraOverlays ? []
 }@chanArgs:
 
@@ -83,7 +82,7 @@ let
     in withVerbosity 2 (builtins.trace "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}") firstSuccess.success;
 
   myChannelArgs = {
-    inherit name requiresImportingChannelArgs topdir extraOverlays args;
+    inherit name topdir extraOverlays args;
   };
 
   # List of { name, path, value } entries of channels found in NIX_PATH

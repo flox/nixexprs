@@ -1,1 +1,1 @@
-{ args = { }; extraOverlays = \[ \]; name = "test"; override = <CODE>; overrideDerivation = <CODE>; requiresImportingChannelArgs = true; topdir = "/nix/store/.*-channels/test"; }
+{ args = { }; extraOverlays = \[ \]; name = "test"; override = <CODE>; overrideDerivation = <CODE>; topdir = "/nix/store/.*-channels/test"; }
