@@ -231,7 +231,10 @@ let
   of that channel. In turn however this allows deep overrides over the whole
   channel dependency tree.
   */
-  channelOutputs = lib.mapAttrs (name: args: outputFun myOverlays myArgs args) channelArgs;
+  channelOutputs =
+    let
+      original = lib.mapAttrs (name: args: outputFun myOverlays myArgs args) channelArgs;
+    in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
 
   # All the overlays that should be applied to the pkgs base set for this
   # channels evaluation (and all the channels it imports)
