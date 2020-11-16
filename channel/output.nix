@@ -126,8 +126,8 @@ let
     };
 
 
-  createSet = super: packageScope: lib.mapAttrs (pname: value:
-    withVerbosity 8 (builtins.trace "[channel ${myArgs.name}] [packageSet toplevel] Auto-calling package ${pname}")
+  createSet = name: super: packageScope: lib.mapAttrs (pname: value:
+    withVerbosity 8 (builtins.trace "[channel ${myArgs.name}] [packageSet ${name}] Auto-calling package ${pname}")
       (lib.callPackageWith (packageScope super pname) value.value {}));
 
   packageSetOutputs = setName: spec:
@@ -222,15 +222,21 @@ let
   myOverlays =
     let
 
+      deepSpecTrace = spec: builtins.trace "[channel ${myArgs.name}] [path ${lib.concatStringsSep "." spec.path}] Deeply overriding attributes ${toString (lib.attrNames spec.funs.deep)}" spec;
+
       # Only the output sets that need a deep override
       # We do this so we can avoid having to add an overlay if not necessary
-      deepOutputSpecs = lib.filter (o: o.funs.deep or {} != {}) outputSpecs;
+      deepOutputSpecs = withVerbosity 6 (map deepSpecTrace) (lib.filter (o: o.funs.deep or {} != {}) outputSpecs);
 
       deepOverlay = self: super:
         let
-          deepOverlaySet = spec: overlaySet super spec.path (superSet:
-            spec.deepOverride superSet (createSet superSet spec.packageScope spec.funs.deep));
+          deepOverlaySet = spec:
+          overlaySet super spec.path (superSet:
+            withVerbosity 5
+              (builtins.trace "[channel ${myArgs.name}] [path ${lib.concatStringsSep "." spec.path}] Creating overriding package set")
+              spec.deepOverride superSet (createSet spec.name superSet spec.packageScope spec.funs.deep));
         in mergeSets (map deepOverlaySet deepOutputSpecs);
+
 
     in lib.optional (deepOutputSpecs != []) deepOverlay ++ myArgs.extraOverlays ++ parentOverlays;
 
@@ -243,10 +249,12 @@ let
       # TODO: Apply hydra recursion
       packageSet = lib.getAttrFromPath spec.path myPkgs;
 
-      shallowOutputs = createSet packageSet spec.packageScope spec.funs.shallow;
+      outputTrace = source: lib.mapAttrs (name: builtins.trace "[channel ${myArgs.name}] [path ${lib.concatStringsSep "." spec.path}] Output attribute ${name} comes from ${source}");
+
+      shallowOutputs = withVerbosity 7 (outputTrace "shallow output") (createSet spec.name packageSet spec.packageScope spec.funs.shallow);
 
       # This "fishes" out the packages that we deeply overlayed out of the resulting package set.
-      deepOutputs = builtins.intersectAttrs spec.funs.deep packageSet;
+      deepOutputs = withVerbosity 7 (outputTrace "deep override") (builtins.intersectAttrs spec.funs.deep packageSet);
 
       canonicalResult = lib.setAttrByPath spec.path (shallowOutputs // deepOutputs);
 
@@ -254,7 +262,9 @@ let
 
     in if spec ? aliasedPath then aliasedResult else canonicalResult;
 
-  outputs = mergeSets (map outputSet outputSpecs);
+  outputs = withVerbosity 6
+    (builtins.trace "Got output spec paths: ${lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path) outputSpecs}") (mergeSets
+    (map outputSet outputSpecs));
 
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
   baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs // {
