@@ -30,6 +30,22 @@ let
       if path == [] then valueMod super
       else { ${subname} = subvalue; };
 
+  /*
+  Same as setAttrByPath, except that lib.recurseIntoAttrs is applied to each path element, such that hydra recurses into the given value
+
+  Examples:
+    hydraSetAttrByPath recurse [] value = value
+    hydraSetAttrByPath recurse [ "foo" ] value = { foo = value // { recurseIntoAttrs = true; }; }
+    hydraSetAttrByPath recurse [ "foo" "bar" ] value = { foo = { recurseIntoAttrs = true; bar = value // { recurseIntoAttrs = true; }; }; }
+  */
+  hydraSetAttrByPath = recurse: attrPath: value:
+    if attrPath == [] then value
+    else {
+      ${lib.head attrPath} = hydraSetAttrByPath recurse (lib.tail attrPath) value // {
+        recurseForDerivations = recurse;
+      };
+    };
+
 in
 parentOverlays: parentArgs: myArgs:
 let
@@ -246,7 +262,6 @@ let
 
   outputSet = spec:
     let
-      # TODO: Apply hydra recursion
       packageSet = lib.getAttrFromPath spec.path myPkgs;
 
       outputTrace = source: lib.mapAttrs (name: builtins.trace "[channel ${myArgs.name}] [path ${lib.concatStringsSep "." spec.path}] Output attribute ${name} comes from ${source}");
@@ -256,9 +271,9 @@ let
       # This "fishes" out the packages that we deeply overlayed out of the resulting package set.
       deepOutputs = withVerbosity 7 (outputTrace "deep override") (builtins.intersectAttrs spec.funs.deep packageSet);
 
-      canonicalResult = lib.setAttrByPath spec.path (shallowOutputs // deepOutputs);
+      canonicalResult = hydraSetAttrByPath spec.recurse spec.path (shallowOutputs // deepOutputs);
 
-      aliasedResult = lib.setAttrByPath spec.path (lib.getAttrFromPath spec.aliasedPath outputs);
+      aliasedResult = hydraSetAttrByPath false spec.path (lib.getAttrFromPath spec.aliasedPath outputs);
 
     in if spec ? aliasedPath then aliasedResult else canonicalResult;
 
