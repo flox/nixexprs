@@ -157,9 +157,10 @@ let
             flox = channels.flox or (throw "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
           };
 
-          output = recurse: path: {
+          output = path: {
             name = setName;
-            inherit recurse path;
+            inherit path;
+            recurse = true;
             deepOverride = spec.deepOverride;
             # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
             # A callPackage abstraction that allows specifying multiple attribute sets might be nice
@@ -172,7 +173,13 @@ let
             inherit funs;
           };
 
-        in [ (output true paths.canonicalPath) ] ++ map (output false) paths.aliases;
+          aliasOutput = path: {
+            name = setName;
+            inherit path;
+            aliasedPath = paths.canonicalPath;
+          };
+
+        in [ (output paths.canonicalPath) ] ++ map aliasOutput paths.aliases;
 
       results = lib.concatLists (lib.mapAttrsToList versionOutput spec.versions);
 
@@ -187,6 +194,14 @@ let
       packageScope = <super: pname: The scope to call a specific package pname with>;
       deepOverride = <set: overrides: How to deeply override this output with nixpkgs overlays using the given overrides>;
       funs = <result from packageSetFuns, contains all package functions, split into deep/shallow>;
+    }
+
+    or if it's an alias definition
+
+    {
+      name = <name for this output set>;
+      path = <attribute path where this set should end up in the channels result>;
+      aliasedPath = <the aliased path the above path should point to>;
     }
   */
   outputSpecs = [ toplevel ] ++ lib.concatLists (lib.mapAttrsToList packageSetOutputs packageSets);
@@ -209,7 +224,7 @@ let
 
       # Only the output sets that need a deep override
       # We do this so we can avoid having to add an overlay if not necessary
-      deepOutputSpecs = lib.filter (o: o.funs.deep != {}) outputSpecs;
+      deepOutputSpecs = lib.filter (o: o.funs.deep or {} != {}) outputSpecs;
 
       deepOverlay = self: super:
         let
@@ -233,7 +248,11 @@ let
       # This "fishes" out the packages that we deeply overlayed out of the resulting package set.
       deepOutputs = builtins.intersectAttrs spec.funs.deep packageSet;
 
-    in lib.setAttrByPath spec.path (shallowOutputs // deepOutputs);
+      canonicalResult = lib.setAttrByPath spec.path (shallowOutputs // deepOutputs);
+
+      aliasedResult = lib.setAttrByPath spec.path (lib.getAttrFromPath spec.aliasedPath outputs);
+
+    in if spec ? aliasedPath then aliasedResult else canonicalResult;
 
   outputs = mergeSets (map outputSet outputSpecs);
 
