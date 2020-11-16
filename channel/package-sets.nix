@@ -7,6 +7,7 @@ let
 
     {
       callScopeAttr = <call scope attr>;
+      deepOverride = <overrideFun>;
       versions = {
         <version> = {
           recurse = <bool>;
@@ -19,7 +20,7 @@ let
       };
     }
   */
-  packageSet = { versionForPackageSet, attrPathForVersion, packageSetAttrPaths, callScopeAttr }:
+  packageSet = { versionForPackageSet, attrPathForVersion, packageSetAttrPaths, callScopeAttr, deepOverride }:
     let
 
       addVersion = path:
@@ -53,7 +54,7 @@ let
       versions = lib.filterAttrs (version: res: res != null) (lib.mapAttrs annotateVersionPaths versionPaths);
 
     in {
-      inherit versions callScopeAttr;
+      inherit versions callScopeAttr deepOverride;
     };
 
 in {
@@ -68,6 +69,8 @@ in {
     Given a nixpkgs set, return all attribute paths that refer to a package set
   - callScopeAttr :: String
     The standard attribute that callPackage passes the package files as an argument for finding the package set
+  - deepOverride :: PackageSet -> PackageSet
+    Takes two package sets and deeply overrides the former to use all dependencies from the latter
   */
 
   haskell = packageSet {
@@ -91,6 +94,11 @@ in {
       in aliases ++ canonicalPaths;
 
     callScopeAttr = "haskellPackages";
+
+    deepOverride = set: overrides:
+      set.override (old: {
+        overrides = lib.composeExtensions old.overrides (self: super: overrides);
+      });
 
   };
 
@@ -116,6 +124,9 @@ in {
 
     callScopeAttr = "beamPackages";
 
+    deepOverride = set: overrides:
+      set.extend (self: super: overrides);
+
   };
 
   python = packageSet {
@@ -136,6 +147,11 @@ in {
 
     callScopeAttr = "pythonPackages";
 
+    deepOverride = set: overrides:
+      set.override (old: {
+        overrides = lib.composeExtensions old.overrides (self: super: overrides);
+      });
+
   };
 
   perl = packageSet {
@@ -155,6 +171,11 @@ in {
       in map lib.singleton names;
 
     callScopeAttr = "perlPackages";
+
+    deepOverride = set: overrides:
+      set.override (old: {
+        overrides = pkgs: old.overrides pkgs // overrides;
+      });
 
   };
 
