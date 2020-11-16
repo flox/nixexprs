@@ -1,0 +1,3 @@
+{ ncurses }: ncurses // {
+  result = "result";
+}
