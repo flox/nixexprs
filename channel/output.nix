@@ -76,7 +76,7 @@ let
           directory = lib.nameValuePair name {
             # TODO: Better error when there's no default.nix?
             value = import (dir + "/${name}");
-            deep = if builtins.pathExists (dir + "/${name}/override.nix") then (import (dir + "/${name}/override.nix")).deep or false else false;
+            deep = builtins.pathExists (dir + "/${name}/deep-override");
             file = dir + "/${name}/default.nix";
           };
 
