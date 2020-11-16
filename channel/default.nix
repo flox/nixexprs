@@ -35,7 +35,12 @@ let
         let
           result =
             if value ? success then
-              if channelNixexprs ? ${value.success} then value
+              let
+                # Find a channel mapping in NIX_PATH that matches the name
+                # This is case-insensitive because GitHub usernames are as well
+                found = lib.findFirst (e: lib.toLower e.name == lib.toLower value.success) null channelNixexprsList;
+              in
+              if found != null then { success = found.name; }
               else {
                 success = lib.warn "Inferred channel name ${value.success} using heuristic ${name}, but no entry for this channel found in NIX_PATH" value.success;
               }
