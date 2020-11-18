@@ -130,7 +130,9 @@ let
 
   outputFun = import ./output.nix { inherit outputFun channelArgs pkgs withVerbosity; };
 
-in {
+in
+# Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
+builtins.seq name {
   outputs = outputFun [] myChannelArgs myChannelArgs;
   channelArguments = myChannelArgs;
 }.${return}
