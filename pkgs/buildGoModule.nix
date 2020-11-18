@@ -3,7 +3,7 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ buildGoModule, getSource, floxInternal, ... }:
+{ buildGoModule, meta, ... }:
 
 # Arguments provided to flox.mkDerivation()
 { project	# the name of the project, required
@@ -11,7 +11,7 @@
 
 # Actually create the derivation.
 buildGoModule ( args // rec {
-  inherit (getSource floxInternal.importingChannelArgs.name project args) version autoversion src name src_json;
+  inherit (meta.getSource project args) version autoversion src name src_json;
 
   # Go development in Nix at flox follows the convention of injecting the
   # version string at build time using ldflags. Nix will deduce the version for
