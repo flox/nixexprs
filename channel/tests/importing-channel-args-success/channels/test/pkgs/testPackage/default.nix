@@ -1,1 +1,0 @@
-{ floxInternal }: floxInternal.importingChannelArgs

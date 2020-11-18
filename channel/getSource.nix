@@ -1,11 +1,7 @@
-{ floxInternal, lib, fetchgit }:
-let
-  inherit (floxInternal.importingChannelArgs) args;
-in
+{ srcpath ? null, channel, lib, fetchgit }@args:
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --arg srcpath <path>,
 # so that needs to take precedence over all other sources of src.
-channel:
 project:
 override:
   let

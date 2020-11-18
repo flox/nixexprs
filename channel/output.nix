@@ -286,8 +286,12 @@ let
 
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
   baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs // {
-    floxInternal = {
-      importingChannelArgs = parentArgs;
+    meta = {
+      getSource = pkgs.callPackage ./getSource.nix ({
+        channel = parentArgs.name;
+      } // lib.optionalAttrs (parentArgs.args ? srcpath) {
+        srcpath = parentArgs.args.srcpath;
+      });
       inherit withVerbosity;
     };
   };

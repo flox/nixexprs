@@ -1,8 +1,8 @@
-{ flox, floxInternal }:
+{ flox, meta }:
 let
-  mockedGetSource = flox.getSource.override {
-    fetchgit = args: builtins.trace "fetchgit called" args;
+  mockedGetSource = meta.getSource.override {
+    fetchgit = args: args;
   };
-in mockedGetSource floxInternal.importingChannelArgs.name "testPackage" {
+in mockedGetSource "testPackage" {
   src = "/some/src/path";
 }

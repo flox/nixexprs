@@ -1,1 +1,1 @@
-{ flox, floxInternal }: flox.getSource floxInternal.importingChannelArgs.name "some-source" {}
+{ flox, meta }: meta.getSource "some-source" {}
