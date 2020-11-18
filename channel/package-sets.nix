@@ -1,5 +1,8 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ nixpkgs ? <nixpkgs> }:
 let
+  pkgs = import nixpkgs { config = {}; overlays = []; };
+  # This is used to determine whether nixpkgs hydra builds certain package sets
+  releasePkgs = import (nixpkgs + "/pkgs/top-level/release.nix") {};
   inherit (pkgs) lib;
 
   /*
@@ -45,8 +48,8 @@ let
           valid = lib.elem canonicalPath paths;
           aliases = lib.remove canonicalPath paths;
           result = {
-            # TODO: Figure out which versions we want to build
-            recurse = true;
+            # If this package set is built in nixpkgs hydra, also build it ourselves
+            recurse = lib.any (p: lib.attrByPath p {} releasePkgs != {}) ([canonicalPath] ++ aliases);
             inherit canonicalPath aliases;
           };
         in if valid then result else null;

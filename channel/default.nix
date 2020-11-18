@@ -9,9 +9,10 @@
 , debugVerbosity ? 0
 , return ? "outputs"
 , srcpath ? ""
-, system ? builtins.currentSystem
 # Used to detect whether this default.nix is a channel (by inspecting function arguments)
 , isFloxChannel ? throw "This argument isn't meant to be accessed"
+# Allow passing other arguments for nixpkgs pkgs/top-level/release-lib.nix compatibility
+, ...
 }@args:
 let
   topdir' = topdir;
@@ -20,9 +21,11 @@ let
   # To prevent any accidental imports into the store, and to make sure it's a string, not a path
   topdir = toString topdir';
 
+  nixpkgsArgs = removeAttrs args [ "name" "debugVerbosity" "return" "srcpath" "isFloxChannel" ];
+
   # We only import nixpkgs once with an overlay that adds all channels, which is
   # also used as a base set for all channels themselves
-  pkgs = import <nixpkgs> { inherit system; };
+  pkgs = import <nixpkgs> nixpkgsArgs;
   inherit (pkgs) lib;
 
   withVerbosity = level: fun: val: if debugVerbosity >= level then fun val else val;
@@ -127,9 +130,7 @@ let
 
   outputFun = import ./output.nix { inherit outputFun channelArgs pkgs withVerbosity; };
 
-  outputs = lib.mapAttrs (name: args: outputFun [] args args) channelArgs;
-
 in {
-  outputs = outputs.${name};
+  outputs = outputFun [] myChannelArgs myChannelArgs;
   channelArguments = myChannelArgs;
 }.${return}

@@ -3,7 +3,7 @@
 { pkgs, outputFun, channelArgs, withVerbosity }:
 let
   # TODO: Pregenerate a JSON from this
-  packageSets = import ./package-sets.nix { inherit pkgs; };
+  packageSets = import ./package-sets.nix { nixpkgs = <nixpkgs>; };
   inherit (pkgs) lib;
 
 
