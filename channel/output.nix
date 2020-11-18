@@ -30,22 +30,6 @@ let
       if path == [] then valueMod super
       else { ${subname} = subvalue; };
 
-  /*
-  Same as setAttrByPath, except that lib.recurseIntoAttrs is applied to each path element, such that hydra recurses into the given value
-
-  Examples:
-    hydraSetAttrByPath recurse [] value = value
-    hydraSetAttrByPath recurse [ "foo" ] value = { foo = value // { recurseIntoAttrs = true; }; }
-    hydraSetAttrByPath recurse [ "foo" "bar" ] value = { foo = { recurseIntoAttrs = true; bar = value // { recurseIntoAttrs = true; }; }; }
-  */
-  hydraSetAttrByPath = recurse: attrPath: value:
-    if attrPath == [] then value
-    else {
-      ${lib.head attrPath} = hydraSetAttrByPath recurse (lib.tail attrPath) value // {
-        recurseForDerivations = recurse;
-      };
-    };
-
 in
 parentOverlays: parentArgs: myArgs:
 let
@@ -131,8 +115,6 @@ let
         flox = channelOutputs.flox or (throw "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
       };
     in {
-      name = "toplevel";
-      recurse = true;
       deepOverride = a: b: b;
       path = [];
       packageScope = super: pname: scope // {
@@ -174,9 +156,7 @@ let
           };
 
           output = path: {
-            name = setName;
             inherit path;
-            recurse = true;
             deepOverride = spec.deepOverride;
             # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
             # A callPackage abstraction that allows specifying multiple attribute sets might be nice
@@ -190,7 +170,6 @@ let
           };
 
           aliasOutput = path: {
-            name = setName;
             inherit path;
             aliasedPath = paths.canonicalPath;
           };
@@ -204,9 +183,7 @@ let
   /*
   A list of entries describing an output set, each of the form
     {
-      name = <name for this output set>;
       path = <attribute path where this set should end up in the channels result>;
-      recurse = <bool whether it should be recursed into by hydra>;
       packageScope = <super: pname: The scope to call a specific package pname with>;
       deepOverride = <set: overrides: How to deeply override this output with nixpkgs overlays using the given overrides>;
       funs = <result from packageSetFuns, contains all package functions, split into deep/shallow>;
@@ -215,7 +192,6 @@ let
     or if it's an alias definition
 
     {
-      name = <name for this output set>;
       path = <attribute path where this set should end up in the channels result>;
       aliasedPath = <the aliased path the above path should point to>;
     }
@@ -274,11 +250,11 @@ let
       # This "fishes" out the packages that we deeply overlayed out of the resulting package set.
       deepOutputs = withVerbosity 7 (outputTrace "deep override") (builtins.intersectAttrs spec.funs.deep packageSet);
 
-      canonicalResult = hydraSetAttrByPath spec.recurse spec.path (shallowOutputs // deepOutputs);
+      result = if spec ? aliasedPath
+        then lib.getAttrFromPath spec.aliasedPath outputs
+        else shallowOutputs // deepOutputs;
 
-      aliasedResult = hydraSetAttrByPath false spec.path (lib.getAttrFromPath spec.aliasedPath outputs);
-
-    in if spec ? aliasedPath then aliasedResult else canonicalResult;
+    in lib.setAttrByPath spec.path result;
 
   outputs = withVerbosity 6
     (builtins.trace "Got output spec paths: ${lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path) outputSpecs}") (mergeSets
