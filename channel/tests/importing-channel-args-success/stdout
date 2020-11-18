@@ -1,1 +1,0 @@
-{ args = { }; extraOverlays = \[ \]; name = "test"; override = <CODE>; overrideDerivation = <CODE>; topdir = "/nix/store/.*-channels/test"; }
