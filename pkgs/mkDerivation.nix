@@ -2,7 +2,7 @@
 # magic required to locate source, version and build number from
 # metadata cached by the nixpkgs mechanism.
 
-{ stdenv, getSource, meta }:
+{ stdenv, meta }:
 
 # Arguments provided to flox.mkDerivation()
 { project	# the name of the project, required
