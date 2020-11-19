@@ -112,10 +112,15 @@ let
       exprEntries = map (e: e // { value = import e.path; }) (lib.filter (e: builtins.pathExists (e.path + "/default.nix")) pathEntries);
       channelEntries = lib.filter (e:
         let
-          isFloxChannel = lib.isFunction e.value && (lib.functionArgs e.value) ? isFloxChannel;
-          result = if isFloxChannel
-            then withVerbosity 1 (builtins.trace "[channel ${e.name}] Importing from `${toString e.path}`") isFloxChannel
-            else withVerbosity 3 (builtins.trace "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${lib.generators.toPretty {} e.value}), ignoring this entry") isFloxChannel;
+          isFloxChannel = builtins.tryEval (lib.isFunction e.value && (lib.functionArgs e.value) ? isFloxChannel);
+          result =
+            if isFloxChannel.success then
+              if isFloxChannel.value then
+                withVerbosity 1 (builtins.trace "[channel ${e.name}] Importing from `${toString e.path}`") true
+              else
+                withVerbosity 3 (builtins.trace "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${lib.generators.toPretty {} e.value}), ignoring this entry") false
+            else
+              withVerbosity 3 (builtins.trace "NIX_PATH entry ${e.name} points to a path ${e.path} which can't be evaluated successfully, ignoring this entry") false;
         in result
       ) exprEntries;
     in withVerbosity 1 (builtins.trace "Found these channel-like entries in NIX_PATH: ${toString (map (e: e.name) channelEntries)}") channelEntries;
