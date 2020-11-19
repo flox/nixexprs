@@ -7,6 +7,10 @@ let
   releaseLib = import <nixpkgs/pkgs/top-level/release-lib.nix> {
     inherit supportedSystems;
     packageSet = channel;
+    nixpkgsArgs = {
+      config.allowUnfree = false;
+      config.inHydra = true;
+      name = floxChannelName;
+    };
   };
-  channelOutputs = channel {};
-in releaseLib.mapTestOn (releaseLib.packagePlatforms channelOutputs)
+in releaseLib.mapTestOn (releaseLib.packagePlatforms releaseLib.pkgs)
