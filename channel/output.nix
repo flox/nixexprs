@@ -271,7 +271,7 @@ let
 
       shallowOutputs = withVerbosity 7 (outputTrace "shallow output") (createSet spec.name packageSet spec.packageScope spec.funs.shallow);
 
-      # This "fishes" out the packages that we deeply overlayed out of the resulting package set.
+      # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
       deepOutputs = withVerbosity 7 (outputTrace "deep override") (builtins.intersectAttrs spec.funs.deep packageSet);
 
       canonicalResult = hydraSetAttrByPath spec.recurse spec.path (shallowOutputs // deepOutputs);
