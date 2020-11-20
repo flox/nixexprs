@@ -79,3 +79,6 @@ Creates a Go application from an auto-updating reference to a repository using G
 #### Returns
 A derivation containing:
 - The binaries declared by the Go package
+
+#### Versions
+This function is only available for the default Go version of nixpkgs `buildGoModule` function, which is currently Go 1.15.x
