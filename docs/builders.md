@@ -90,3 +90,22 @@ A derivation containing:
 
 #### Versions
 This function is only available for the default Go version of nixpkgs `buildGoModule` function, which is currently Go 1.15.x
+
+## `flox.buildGoPackage`
+
+Creates a Go application from an auto-updating reference to a repository. Can be used for both projects using Go modules and ones that don't.
+
+**For files:** `pkgs/<name>/default.nix`
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application.
+- All other arguments are passed to nixpkgs `buildGoPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) for more information. The most important arguments are:
+  - `goPackagePath` (string, mandatory): The package's canonical Go import path.
+  - `goDeps` (path, mandatory): Path to `deps.nix` file containing package dependencies. For a project using Go modules, this can be generated with [vgo2nix](https://github.com/nix-community/vgo2nix), for other projects [go2nix](https://github.com/kamilchm/go2nix) can be used.
+
+#### Returns
+A derivation containing:
+- The binaries declared by the Go package
+
+#### Versions
+This function is only available for the default Go version of nixpkgs `buildGoPackage` function, which is currently Go 1.15.x
