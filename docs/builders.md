@@ -1,15 +1,17 @@
 # Flox builders
 
-| Builder | Intended channel directory | Underlying nixpkgs function |
+| Builder | Intended for channel files | Underlying nixpkgs function |
 | --- | --- | --- |
-| [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpackage) | `./pythonPackages` | [`pythonPackages.buildPythonPackage`](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) |
-| [`flox.pythonPackage.buildPythonApplication`](#floxpythonpackagesbuildpythonapplication) | `./pkgs` | [`pythonPackages.buildPythonApplication`](https://nixos.org/manual/nixpkgs/stable/#buildpythonapplication-function) |
-| [`flox.perlPackages.buildPerlPackage`](#floxperlpackagesbuildperlpackage) | `./perlPackages` or `./pkgs` | [`perlPackages.buildPerlPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) |
-| [`flox.buildGoModule`](#floxbuildgomodule) | `./pkgs` | [`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) |
+| [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpackage) | `pythonPackages/<name>/default.nix` | [`pythonPackages.buildPythonPackage`](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) |
+| [`flox.pythonPackage.buildPythonApplication`](#floxpythonpackagesbuildpythonapplication) | `pkgs/<name>/default.nix` | [`pythonPackages.buildPythonApplication`](https://nixos.org/manual/nixpkgs/stable/#buildpythonapplication-function) |
+| [`flox.perlPackages.buildPerlPackage`](#floxperlpackagesbuildperlpackage) | `perlPackages/<name>/default.nix` or `pkgs/<name>/defaut.nix` | [`perlPackages.buildPerlPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) |
+| [`flox.buildGoModule`](#floxbuildgomodule) | `pkgs/<name>/default.nix` | [`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) |
 
 ## `flox.pythonPackages.buildPythonPackage`
 
-Creates a Python package from an auto-updating reference to a repository. This function is intended to be used for the definitions of a channels `./pythonPackages/<name>/default.nix` files.
+Creates a Python package from an auto-updating reference to a repository.
+
+**For files:** `pythonPackages/<name>/default.nix`
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Python package.
@@ -29,7 +31,9 @@ Python packages declared with this function in `./pythonPackages` are version-ag
 
 ## `flox.pythonPackages.buildPythonApplication`
 
-Creates a Python application from an auto-updating reference to a repository. Because this function doesn't return any Python modules, it is intended to be used for the definition of a channels `./pkgs/<name>/default.nix` files.
+Creates a Python application from an auto-updating reference to a repository. Note that this function doesn't return any Python modules, making in unfit for use in `pythonPackages/<name>/default.nix`.
+
+**For files:** `pkgs/<name>/default.nix`
 
 #### Inputs
 See [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpackage) for documentation of this functions arguments, they take exactly the same inputs. See nixpkgs [`pythonPackages.buildPythonApplication` documentation](https://nixos.org/manual/nixpkgs/stable/#buildpythonapplication-function) for more info on the difference between the two.
@@ -46,7 +50,9 @@ A derivation containing:
 
 ## `flox.perlPackages.buildPerlPackage`
 
-Creates a Perl package or application from an auto-updating reference to a repository. This function can be used either for a channels `./perlPackages/<name>/default.nix` files for defining Perl packages, or `./pkgs/<name>/default.nix` for defining Perl applications.
+Creates a Perl package or application from an auto-updating reference to a repository.
+
+**For files:** `perlPackages/<name>/default.nix` for packages or `pkgs/<name>/default.nix` for applications
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Perl package.
@@ -69,7 +75,9 @@ Perl applications declared with this function in `./pkgs` can choose the version
 
 ## `flox.buildGoModule`
 
-Creates a Go application from an auto-updating reference to a repository using Go modules (having a `go.mod` file). This function is intended to be used to define a channels `./pkgs/<name>/default.nix` files.
+Creates a Go application from an auto-updating reference to a repository using Go modules (having a `go.mod` file).
+
+**For files:** `pkgs/<name>/default.nix`
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application.
