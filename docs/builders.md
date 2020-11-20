@@ -5,6 +5,7 @@
 | [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpackage) | `./pythonPackages` | [`pythonPackages.buildPythonPackage`](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) |
 | [`flox.pythonPackage.buildPythonApplication`](#floxpythonpackagesbuildpythonapplication) | `./pkgs` | [`pythonPackages.buildPythonApplication`](https://nixos.org/manual/nixpkgs/stable/#buildpythonapplication-function) |
 | [`flox.perlPackages.buildPerlPackage`](#floxperlpackagesbuildperlpackage) | `./perlPackages` or `./pkgs` | [`perlPackages.buildPerlPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) |
+| [`flox.buildGoModule`](#floxbuildgomodule) | `./pkgs` | [`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) |
 
 ## `flox.pythonPackages.buildPythonPackage`
 
@@ -65,3 +66,16 @@ Perl packages declared with this function in `./perlPackages` are version-agnost
 Perl applications declared with this function in `./pkgs` can choose the version:
 - `flox.perlPackages.buildPerlPackage`: Uses the default Perl version of nixpkgs (currently 5.32.x)
 - In addition, specific minor Perl versions supported by nixpkgs can be used, which currently includes `perl530Packages` and `perl532Packages`. However support for these might disappear over time.
+
+## `flox.buildGoModule`
+
+Creates a Go application from an auto-updating reference to a repository using Go modules (having a `go.mod` file). This function is intended to be used to define a channels `./pkgs/<name>/default.nix` files.
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application.
+- All other arguments are passed to nixpkgs `buildGoModule` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) for more information. The most important arguments are:
+  - `vendorSha256` (string or null, mandatory): The hash of all the dependencies, or `null` if the package vendors dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
+
+#### Returns
+A derivation containing:
+- The binaries declared by the Go package
