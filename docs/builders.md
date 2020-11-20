@@ -6,7 +6,7 @@ Creates a Python package from an auto-updating reference to a repository. This f
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Python package.
-- All other arguments are passed to `pythonPackages.buildPythonPackage`. Refer to [its full documentation](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) for more information. The most important arguments are:
+- All other arguments are passed to nixpkgs `pythonPackages.buildPythonPackage` function. Refer to [its full documentation](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) for more information. The most important arguments are:
   - `propagatedBuildInputs` (list of Python package derivations, default `[]`): Python runtime dependencies
   - `checkInputs` (list of Python package derivations, default `[]`): Python test dependencies
 
@@ -37,3 +37,26 @@ A derivation containing:
 - `flox.python3Packages.buildPythonApplication`: Uses the default Python 3 version of nixpkgs (currently 3.8.x)
 
 In addition, specific minor Python versions supported by nixpkgs can be used, such as `python37Packages`, `python39Packages`, etc. However support for these might disappear over time.
+
+## `flox.perlPackages.buildPerlPackage`
+
+Creates a Perl package or application from an auto-updating reference to a repository. This function can be used either for a channels `./perlPackages/<name>/default.nix` files for defining Perl packages, or `./pkgs/<name>/default.nix` for defining Perl applications.
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Perl package.
+- All other arguments are passed to nixpkgs `perlPackages.buildPerlPackage` function. Refer to [nixpkgs Perl packaging documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) for more information. The most important arguments are:
+  - `propagatedBuildInputs` (list of Perl package derivations, default `[]`): Perl dependencies
+
+#### Returns
+A derivation containing:
+- A Perl package suitable for use as a dependency of other Perl packages
+- All binaries or other outputs declared by the Perl package, e.g. by `install_script` in `Makefile.PL`
+
+#### Versions
+Perl packages declared with this function in `./perlPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+- The channel result will contain this package for all supported Perl versions
+- The builder automatically uses the correct Perl version
+
+Perl applications declared with this function in `./pkgs` can choose the version:
+- `flox.perlPackages.buildPerlPackage`: Uses the default Perl version of nixpkgs (currently 5.32.x)
+In addition, specific minor Perl versions supported by nixpkgs can be used, which currently includes `perl530Packages` and `perl532Packages`. However support for these might disappear over time.
