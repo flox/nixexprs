@@ -1,5 +1,11 @@
 # Flox builders
 
+| Builder | Intended channel directory | Underlying nixpkgs function |
+| --- | --- | --- |
+| [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpackage) | `./pythonPackages` | [`pythonPackages.buildPythonPackage`](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) |
+| [`flox.pythonPackage.buildPythonApplication`](#floxpythonpackagesbuildpythonapplication) | `./pkgs` | [`pythonPackages.buildPythonApplication`](https://nixos.org/manual/nixpkgs/stable/#buildpythonapplication-function) |
+| [`flox.perlPackages.buildPerlPackage`](#floxperlpackagesbuildperlpackage) | `./perlPackages` or `./pkgs` | [`perlPackages.buildPerlPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) |
+
 ## `flox.pythonPackages.buildPythonPackage`
 
 Creates a Python package from an auto-updating reference to a repository. This function is intended to be used for the definitions of a channels `./pythonPackages/<name>/default.nix` files.
