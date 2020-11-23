@@ -1,5 +1,5 @@
 { rustPlatform, meta }:
-{ project, overrides ? {}, ... }@args:
+{ project, ... }@args:
 rustPlatform.buildRustPackage (args // {
-  inherit (meta.getSource project overrides) pname version src;
+  inherit (meta.getSource project args) pname version src;
 })
