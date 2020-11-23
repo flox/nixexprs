@@ -1,4 +1,4 @@
-{ sourceOverrideJson, channel, lib, fetchgit }:
+{ channelSourceOverrides, channel, lib, fetchgit }:
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
 # so that needs to take precedence over all other sources of src.
@@ -10,9 +10,8 @@ override:
       then throw "Could not find source for project \"${project}\" because the channel name is unknown."
       else builtins.findFile builtins.nixPath "${channel}-meta/srcs";
 
-    sourceOverrides = builtins.fromJSON sourceOverrideJson;
-    isOverridden = sourceOverrides ? ${project};
-    overriddenSource = builtins.fetchGit sourceOverrides.${project};
+    isOverridden = channelSourceOverrides ? ${project};
+    overriddenSource = builtins.fetchGit channelSourceOverrides.${project};
 
     _srcs_json_ = srcs + "/${project}.json";
     revdata = if builtins.pathExists _srcs_json_ then lib.importJSON _srcs_json_

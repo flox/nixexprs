@@ -2,7 +2,7 @@
 let
   channel = import <test> {
     sourceOverrideJson = builtins.toJSON {
-      testPackage = toString repo;
+      test.testPackage = toString repo;
     };
   };
   contents = builtins.readFile (channel.testPackage.result.src.src + "/file");
