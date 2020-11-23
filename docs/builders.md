@@ -9,6 +9,7 @@
 | [`flox.buildGoPackage`](#floxbuildgopackage) | `pkgs/<name>/default.nix` | [`buildGoPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) |
 | [`flox.buildRustPackage`](#floxbuildrustpackage) | `pkgs/<name>/default.nix` | [`rustPlatform.buildRustPackage`](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) |
 | [`flox.haskellPackages.mkDerivation`](#floxhaskellpackagesmkderivation) | `haskellPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`haskellPackages.mkDerivation`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) |
+| [`flox.beamPackages.buildErlangMk`](#floxbeampackagesbuilderlangmk) | `beamPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`beamPackages.buildErlangMk`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/beam-modules/build-erlang-mk.nix) |
 
 ## `flox.pythonPackages.buildPythonPackage`
 
@@ -163,3 +164,29 @@ Haskell packages declared with this function in `./haskellPackages` are version-
 Haskell applications declared with this function in `./pkgs` can choose the version:
 - `flox.haskellPackages.mkDerivation`: Uses the default Haskell version of nixpkgs (currently Haskell GHC 8.8.x)
 - `flox.haskell.packages.ghcXXX.mkDerivation`: Uses GHC version XXX, e.g. `ghc865` for GHC 8.6.5 or `ghc882` for GHC 8.8.2. Only versions available in nixpkgs are supported, and this will change over time.
+
+## `flox.beamPackages.buildErlangMk`
+
+Creates an Erlang package or application from an auto-updating reference to a repository.
+
+**For files:** `beamPackages/<name>/default.nix` for packages or `pkgs/<name>/default.nix` for applications
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Erlang package. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `beamPackages.buildErlangMk` function. Refer to [its source](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/beam-modules/build-erlang-mk.nix) for more information. The most important arguments are:
+  - `beamDeps` (list of beam packages, default `[]`): The Erlang dependencies of this package
+
+#### Returns
+A derivation containing:
+- An Erlang package suitable for use as a dependency of other Erlang packages
+- All binaries specified by the Erlang package
+
+#### Versions
+Erlang packages declared with this function in `./beamPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+- The channel result will contain this package for all supported Erlang versions
+- The builder automatically uses the correct Erlang version
+
+Erlang applications declared with this function in `./pkgs` can choose the version:
+- `flox.beamPackages.buildErlangMk`: Uses the default Erlang version of nixpkgs (currently Erlang 22.3)
+- `flox.beam.packages.erlangRXX.mkDerivation`: Uses Erlang version XX, e.g. `erlangR18` for Erlang 18.x or `erlangR23` for Erlang 23.x. Only versions available in nixpkgs are supported, and this will change over time.
