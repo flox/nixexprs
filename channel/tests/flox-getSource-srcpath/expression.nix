@@ -1,8 +1,14 @@
 { repo }:
 let
-  channel = import <test> { srcpath = repo; };
-  contents = builtins.readFile (channel.testPackage.src + "/file");
-in {
-  inherit (channel.testPackage) project src origversion autoversion version pname name src_json;
-  inherit contents;
-}
+  channel = import <test> {
+    sourceOverrideJson = builtins.toJSON {
+      testPackage = toString repo;
+    };
+  };
+  contents = builtins.readFile (channel.testPackage.result.src.src + "/file");
+  result = {
+    inherit (channel.testPackage.result.src) project src origversion autoversion version pname name src_json;
+    inherit contents;
+    inherit (channel.testPackage.result) result;
+  };
+in result
