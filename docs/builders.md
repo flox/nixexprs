@@ -2,6 +2,7 @@
 
 | Builder | Intended for channel files | Underlying nixpkgs function |
 | --- | --- | --- |
+| [`flox.mkDerivation`](#floxmkderivation) | `pkgs/<name>/default.nix` | [`stdenv.mkDerivation`](https://nixos.org/manual/nixpkgs/stable/#chap-stdenv) |
 | [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpackage) | `pythonPackages/<name>/default.nix` | [`pythonPackages.buildPythonPackage`](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) |
 | [`flox.pythonPackage.buildPythonApplication`](#floxpythonpackagesbuildpythonapplication) | `pkgs/<name>/default.nix` | [`pythonPackages.buildPythonApplication`](https://nixos.org/manual/nixpkgs/stable/#buildpythonapplication-function) |
 | [`flox.perlPackages.buildPerlPackage`](#floxperlpackagesbuildperlpackage) | `perlPackages/<name>/default.nix` or `pkgs/<name>/defaut.nix` | [`perlPackages.buildPerlPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) |
@@ -10,6 +11,25 @@
 | [`flox.buildRustPackage`](#floxbuildrustpackage) | `pkgs/<name>/default.nix` | [`rustPlatform.buildRustPackage`](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) |
 | [`flox.haskellPackages.mkDerivation`](#floxhaskellpackagesmkderivation) | `haskellPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`haskellPackages.mkDerivation`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) |
 | [`flox.beamPackages.buildErlangMk`](#floxbeampackagesbuilderlangmk) | `beamPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`beamPackages.buildErlangMk`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/beam-modules/build-erlang-mk.nix) |
+
+## `flox.mkDerivation`
+
+Creates a package using nixpkgs standard environment builder. Use this for C/C++ projects.
+
+**For files:** `pkgs/<name>/default.nix`
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this package. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `stdenv.mkDerivation` function. Refer to the [standard environment documentation](https://nixos.org/manual/nixpkgs/stable/#chap-stdenv) for more information. The most important arguments are:
+  - `buildInputs` (list of packages, default `[]`): Package dependencies, e.g. dynamic libraries
+  - `nativeBuildInputs` (list of packages, default `[]`): Build-time dependencies, such as e.g. `cmake` or `pkg-config`
+  - `configurePhase` (string, default ~`./configure`): Command to run for configuring the package
+  - `buildPhase` (string, default ~`make`): Command to run for building the package
+  - `installPhase` (string, default ~`make install`): Command to run for installing the package
+
+#### Returns
+A derivation containing whatever was installed with the standard phases
 
 ## `flox.pythonPackages.buildPythonPackage`
 
