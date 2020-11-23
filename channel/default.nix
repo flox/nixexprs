@@ -8,7 +8,8 @@
 { name ? null
 , debugVerbosity ? 0
 , return ? "outputs"
-, srcpath ? ""
+# JSON string of a `<channelName> -> <projectName> -> <srcpath>` mapping. This overrides the sources used by these channels/projects to the given paths.
+, sourceOverrideJson ? "{}"
 # Used to detect whether this default.nix is a channel (by inspecting function arguments)
 , isFloxChannel ? throw "This argument isn't meant to be accessed"
 # Allow passing other arguments for nixpkgs pkgs/top-level/release-lib.nix compatibility
@@ -21,7 +22,7 @@ let
   # To prevent any accidental imports into the store, and to make sure it's a string, not a path
   topdir = toString topdir';
 
-  nixpkgsArgs = removeAttrs args [ "name" "debugVerbosity" "return" "srcpath" "isFloxChannel" ];
+  nixpkgsArgs = removeAttrs args [ "name" "debugVerbosity" "return" "sourceOverrideJson" "isFloxChannel" ];
 
   # We only import nixpkgs once with an overlay that adds all channels, which is
   # also used as a base set for all channels themselves
@@ -133,7 +134,10 @@ let
     ${name} = myChannelArgs;
   };
 
-  outputFun = import ./output.nix { inherit outputFun channelArgs pkgs withVerbosity; };
+  outputFun = import ./output.nix {
+    inherit outputFun channelArgs pkgs withVerbosity;
+    sourceOverrides = builtins.fromJSON sourceOverrideJson;
+  };
 
 in
 # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel

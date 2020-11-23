@@ -1,6 +1,6 @@
 # Returns the auto-generated output of a channel
 # TODO: Add debug logs
-{ pkgs, outputFun, channelArgs, withVerbosity }:
+{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides }:
 let
   # TODO: Pregenerate a JSON from this
   packageSets = import ./package-sets.nix { nixpkgs = <nixpkgs>; };
@@ -287,11 +287,10 @@ let
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
   baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs // {
     meta = {
-      getSource = pkgs.callPackage ./getSource.nix ({
-        channel = parentArgs.name;
-      } // lib.optionalAttrs (parentArgs.args ? srcpath) {
-        srcpath = parentArgs.args.srcpath;
-      });
+      getSource = pkgs.callPackage ./getSource.nix {
+        channel = myArgs.name;
+        channelSourceOverrides = sourceOverrides.${myArgs.name} or {};
+      };
       inherit withVerbosity;
     };
   };
