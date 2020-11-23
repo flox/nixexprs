@@ -1,4 +1,4 @@
-{ runCommandNoCC, which, runtimeShell }:
+{ lib, runCommandNoCC, which, runtimeShell }:
 dir:
 runCommandNoCC "setup-dotfiles" {
   script = ''
@@ -21,6 +21,8 @@ runCommandNoCC "setup-dotfiles" {
       --symbolic-link --no-target-directory --no-preserve=mode \
       "$sourcePath" "$targetPath"
   '';
+
+  meta.platforms = lib.platforms.all;
 
   passAsFile = [ "script" ];
 } ''
