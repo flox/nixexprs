@@ -7,11 +7,11 @@
 # Arguments for the command line
 { name ? null
 , debugVerbosity ? 0
-, return ? "outputs"
 # JSON string of a `<channelName> -> <projectName> -> <srcpath>` mapping. This overrides the sources used by these channels/projects to the given paths.
 , sourceOverrideJson ? "{}"
+, _return ? "outputs"
 # Used to detect whether this default.nix is a channel (by inspecting function arguments)
-, isFloxChannel ? throw "This argument isn't meant to be accessed"
+, _isFloxChannel ? throw "This argument isn't meant to be accessed"
 # Allow passing other arguments for nixpkgs pkgs/top-level/release-lib.nix compatibility
 , ...
 }@args:
@@ -22,7 +22,7 @@ let
   # To prevent any accidental imports into the store, and to make sure it's a string, not a path
   topdir = toString topdir';
 
-  nixpkgsArgs = removeAttrs args [ "name" "debugVerbosity" "return" "sourceOverrideJson" "isFloxChannel" ];
+  nixpkgsArgs = removeAttrs args [ "name" "debugVerbosity" "_return" "sourceOverrideJson" "_isFloxChannel" ];
 
   # We only import nixpkgs once with an overlay that adds all channels, which is
   # also used as a base set for all channels themselves
@@ -113,7 +113,7 @@ let
       exprEntries = map (e: e // { value = import e.path; }) (lib.filter (e: builtins.pathExists (e.path + "/default.nix")) pathEntries);
       channelEntries = lib.filter (e:
         let
-          isFloxChannel = builtins.tryEval (lib.isFunction e.value && (lib.functionArgs e.value) ? isFloxChannel);
+          isFloxChannel = builtins.tryEval (lib.isFunction e.value && (lib.functionArgs e.value) ? _isFloxChannel);
           result =
             if isFloxChannel.success then
               if isFloxChannel.value then
@@ -128,7 +128,7 @@ let
 
   channelNixexprs = lib.listToAttrs channelNixexprsList;
 
-  importChannelSrc = name: fun: fun { inherit name; return = "channelArguments"; };
+  importChannelSrc = name: fun: fun { inherit name; _return = "channelArguments"; };
 
   channelArgs = lib.mapAttrs importChannelSrc channelNixexprs // {
     ${name} = myChannelArgs;
@@ -144,4 +144,4 @@ in
 builtins.seq name {
   outputs = outputFun [] myChannelArgs myChannelArgs;
   channelArguments = myChannelArgs;
-}.${return}
+}.${_return}
