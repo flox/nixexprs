@@ -1,6 +1,6 @@
-{ srcpath ? null, channel, lib, fetchgit }@args:
+{ sourceOverrideJson, channel, lib, fetchgit }:
 # Set the src and version variables based on project.
-# Recall that flox calls this expression with --arg srcpath <path>,
+# Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
 # so that needs to take precedence over all other sources of src.
 project:
 override:
@@ -10,7 +10,10 @@ override:
       then throw "Could not find source for project \"${project}\" because the channel name is unknown."
       else builtins.findFile builtins.nixPath "${channel}-meta/srcs";
 
-    s = args.srcpath or "";
+    sourceOverrides = builtins.fromJSON sourceOverrideJson;
+    isOverridden = sourceOverrides ? ${project};
+    overriddenSource = builtins.fetchGit sourceOverrides.${project};
+
     _srcs_json_ = srcs + "/${project}.json";
     revdata = if builtins.pathExists _srcs_json_ then lib.importJSON _srcs_json_
       else throw "Could not find source for project \"${project}\" in channel \"${channel}\". Are webhooks for that repository set up?";
@@ -56,23 +59,23 @@ override:
 
   in rec {
     inherit project origversion autoversion;
-    _src = if s == "" then (override.src or autosrc) else s;
-    src = if s == "" then _src else builtins.fetchGit s;
+    _src = if isOverridden then overriddenSource else override.src or autosrc;
+    src = if isOverridden then overriddenSource else _src;
 
-    version = if s == "" then autoversion else "manual";
+    version = if isOverridden then "manual" else autoversion;
     pname = (override.pname or project);
     name = pname + "-" + version;
-    src_json = if s == "" then (
-      # Redact the "path" attribute from the latest source data - we don't
-      # need it, and it causes the source package to be included in the
-      # closure of runtime dependencies.
-      builtins.toJSON (
-        lib.attrsets.filterAttrs ( n: v: n != "path" ) _src_
-      )
-    ) else (
-      builtins.toJSON {
-        inherit project src version pname name;
-        system = builtins.currentSystem;
-      }
-    );
+    src_json =
+      if isOverridden then
+        builtins.toJSON {
+          inherit project src version pname name;
+          system = builtins.currentSystem;
+        }
+      else
+        # Redact the "path" attribute from the latest source data - we don't
+        # need it, and it causes the source package to be included in the
+        # closure of runtime dependencies.
+        builtins.toJSON (
+          lib.attrsets.filterAttrs ( n: v: n != "path" ) _src_
+        );
   }

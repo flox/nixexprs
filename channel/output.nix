@@ -289,8 +289,7 @@ let
     meta = {
       getSource = pkgs.callPackage ./getSource.nix ({
         channel = parentArgs.name;
-      } // lib.optionalAttrs (parentArgs.args ? srcpath) {
-        srcpath = parentArgs.args.srcpath;
+        sourceOverrideJson = parentArgs.args.sourceOverrideJson or "{}";
       });
       inherit withVerbosity;
     };
