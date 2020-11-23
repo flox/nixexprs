@@ -7,6 +7,7 @@
 | [`flox.perlPackages.buildPerlPackage`](#floxperlpackagesbuildperlpackage) | `perlPackages/<name>/default.nix` or `pkgs/<name>/defaut.nix` | [`perlPackages.buildPerlPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) |
 | [`flox.buildGoModule`](#floxbuildgomodule) | `pkgs/<name>/default.nix` | [`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) |
 | [`flox.buildGoPackage`](#floxbuildgopackage) | `pkgs/<name>/default.nix` | [`buildGoPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) |
+| [`flox.buildRustPackage`](#floxbuildrustpackage) | `pkgs/<name>/default.nix` | [`rustPlatform.buildRustPackage`](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) |
 
 ## `flox.pythonPackages.buildPythonPackage`
 
@@ -110,3 +111,22 @@ A derivation containing:
 
 #### Versions
 This function is only available for the default Go version of nixpkgs `buildGoPackage` function, which is currently Go 1.15.x
+
+## `flox.buildRustPackage`
+
+Creates a Rust application from an auto-updating reference to a repository.
+
+**For files:** `pkgs/<name>/default.nix`
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Rust application.
+- All other arguments are passed to nixpkgs `rustPlatform.buildRustPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) for more information. One of the following arguments is needed for specifying the dependencies:
+  - `cargoSha256` (string): The hash of all dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
+  - `cargoVendorDir` (path): An alternative to `cargoSha256`, which can be used if dependencies are vendored with `cargo vendor`. Pass the path to the `vendor` directory with this option.
+
+#### Returns
+A derivation containing:
+- The binaries declared by the Rust package
+
+#### Versions
+This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
