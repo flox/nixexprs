@@ -16,8 +16,9 @@ Creates a Python package from an auto-updating reference to a repository.
 **For files:** `pythonPackages/<name>/default.nix`
 
 #### Inputs
-- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Python package.
-- All other arguments are passed to nixpkgs `pythonPackages.buildPythonPackage` function. Refer to [its full documentation](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) for more information. The most important arguments are:
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Python package. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `pythonPackages.buildPythonPackage` function. Refer to [its full documentation](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) for more information. The most important arguments are:
   - `propagatedBuildInputs` (list of Python package derivations, default `[]`): Python runtime dependencies
   - `checkInputs` (list of Python package derivations, default `[]`): Python test dependencies
 
@@ -57,8 +58,9 @@ Creates a Perl package or application from an auto-updating reference to a repos
 **For files:** `perlPackages/<name>/default.nix` for packages or `pkgs/<name>/default.nix` for applications
 
 #### Inputs
-- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Perl package.
-- All other arguments are passed to nixpkgs `perlPackages.buildPerlPackage` function. Refer to [nixpkgs Perl packaging documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) for more information. The most important arguments are:
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Perl package. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `perlPackages.buildPerlPackage` function. Refer to [nixpkgs Perl packaging documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) for more information. The most important arguments are:
   - `propagatedBuildInputs` (list of Perl package derivations, default `[]`): Perl dependencies
 
 #### Returns
@@ -82,8 +84,9 @@ Creates a Go application from an auto-updating reference to a repository using G
 **For files:** `pkgs/<name>/default.nix`
 
 #### Inputs
-- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application.
-- All other arguments are passed to nixpkgs `buildGoModule` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) for more information. The most important arguments are:
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `buildGoModule` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) for more information. The most important arguments are:
   - `vendorSha256` (string or null, mandatory): The hash of all the dependencies, or `null` if the package vendors dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
 
 #### Returns
@@ -100,8 +103,9 @@ Creates a Go application from an auto-updating reference to a repository. Can be
 **For files:** `pkgs/<name>/default.nix`
 
 #### Inputs
-- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application.
-- All other arguments are passed to nixpkgs `buildGoPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) for more information. The most important arguments are:
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `buildGoPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) for more information. The most important arguments are:
   - `goPackagePath` (string, mandatory): The package's canonical Go import path.
   - `goDeps` (path, mandatory): Path to `deps.nix` file containing package dependencies. For a project using Go modules, this can be generated with [vgo2nix](https://github.com/nix-community/vgo2nix), for other projects [go2nix](https://github.com/kamilchm/go2nix) can be used.
 
@@ -119,8 +123,9 @@ Creates a Rust application from an auto-updating reference to a repository.
 **For files:** `pkgs/<name>/default.nix`
 
 #### Inputs
-- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Rust application.
-- All other arguments are passed to nixpkgs `rustPlatform.buildRustPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) for more information. One of the following arguments is needed for specifying the dependencies:
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Rust application. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `rustPlatform.buildRustPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) for more information. One of the following arguments is needed for specifying the dependencies:
   - `cargoSha256` (string): The hash of all dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
   - `cargoVendorDir` (path): An alternative to `cargoSha256`, which can be used if dependencies are vendored with `cargo vendor`. Pass the path to the `vendor` directory with this option.
 
