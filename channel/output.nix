@@ -288,8 +288,8 @@ let
   baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs // {
     meta = {
       getSource = pkgs.callPackage ./getSource.nix {
-        channel = parentArgs.name;
-        channelSourceOverrides = sourceOverrides.${parentArgs.name} or {};
+        channel = myArgs.name;
+        channelSourceOverrides = sourceOverrides.${myArgs.name} or {};
       };
       inherit withVerbosity;
     };
