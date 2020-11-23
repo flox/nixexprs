@@ -1,0 +1,19 @@
+{
+  "branches": {
+    "master": "6b1f9a5663bb2c7626a15d8c66218fcf5b0f7036"
+  },
+  "srcs": {
+    "6b1f9a5663bb2c7626a15d8c66218fcf5b0f7036": {
+      "url": "/home/infinisil/test/dep",
+      "rev": "5b1f9a5663bb2c7626a15d8c66218fcf5b0f7036",
+      "date": "2020-11-13T15:37:07+01:00",
+      "path": "/nix/store/7i603hqpfk194avbfggp07wnhq9fp64x-empty",
+      "sha256": "0p38wqh76y277vxhdkg0virz3fd8n5626i3bi1pw28cxfp81i0mf",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.14",
+      "revision": 3
+    }
+  }
+}

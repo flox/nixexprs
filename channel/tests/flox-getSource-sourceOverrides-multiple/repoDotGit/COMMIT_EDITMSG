@@ -1,0 +1,18 @@
+3
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch master
+# Changes to be committed:
+#	modified:   file
+#
+# ------------------------ >8 ------------------------
+# Do not modify or remove the line above.
+# Everything below it will be ignored.
+diff --git a/file b/file
+index 0cfbf08..00750ed 100644
+--- a/file
++++ b/file
+@@ -1 +1 @@
+-2
++3

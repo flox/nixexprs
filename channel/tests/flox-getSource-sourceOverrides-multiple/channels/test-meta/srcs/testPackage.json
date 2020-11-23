@@ -1,0 +1,44 @@
+{
+  "branches": {
+    "master": "6b1f9a5663bb2c7626a15d8c66218fcf5b0f7036",
+    "alt": "a6795e5d74e415fcb4ea1e8390ba33954ad17831"
+  },
+  "srcs": {
+    "6689649b02fe0ae21cef81d81cf6f33a173ffc05": {
+      "url": "/home/infinisil/test/empty",
+      "rev": "6689649b02fe0ae21cef81d81cf6f33a173ffc05",
+      "date": "2020-11-13T15:36:34+01:00",
+      "path": "/nix/store/bk5rghj0yk4h99kfiglh927ws8ahnsfk-empty",
+      "sha256": "08qdyrq68fi2v141dgh8p7dpifhachhkh8785p7dhy3sb7arbisk",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.13",
+      "revision": 1
+    },
+    "6b1f9a5663bb2c7626a15d8c66218fcf5b0f7036": {
+      "url": "/home/infinisil/test/empty",
+      "rev": "6b1f9a5663bb2c7626a15d8c66218fcf5b0f7036",
+      "date": "2020-11-13T15:37:07+01:00",
+      "path": "/nix/store/7i603hqpfk194avbfggp07wnhq9fp64x-empty",
+      "sha256": "1p38wqh76y277vxhdkg0virz3fd8n5626i3bi1pw28cxfp81i0mf",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.13",
+      "revision": 2
+    },
+    "a6795e5d74e415fcb4ea1e8390ba33954ad17831": {
+      "url": "/home/infinisil/test/empty",
+      "rev": "a6795e5d74e415fcb4ea1e8390ba33954ad17831",
+      "date": "2020-11-13T15:37:34+01:00",
+      "path": "/nix/store/6kcdqdv7iazif6lpmqjwb42fsxaahx6g-empty",
+      "sha256": "0m0ijc8h0h91lxsmvsxcp9abpsblpfnbs9nqwvy9dci0by3g71vl",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "2020.11.13",
+      "revision": 3
+    }
+  }
+}
