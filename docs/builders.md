@@ -8,6 +8,7 @@
 | [`flox.buildGoModule`](#floxbuildgomodule) | `pkgs/<name>/default.nix` | [`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) |
 | [`flox.buildGoPackage`](#floxbuildgopackage) | `pkgs/<name>/default.nix` | [`buildGoPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) |
 | [`flox.buildRustPackage`](#floxbuildrustpackage) | `pkgs/<name>/default.nix` | [`rustPlatform.buildRustPackage`](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) |
+| [`flox.haskellPackages.mkDerivation`](#floxhaskellpackagesmkderivation) | `haskellPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`haskellPackages.mkDerivation`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) |
 
 ## `flox.pythonPackages.buildPythonPackage`
 
@@ -135,3 +136,30 @@ A derivation containing:
 
 #### Versions
 This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
+
+## `flox.haskellPackages.mkDerivation`
+
+Creates a Haskell package or application from an auto-updating reference to a repository.
+
+**For files:** `haskellPackages/<name>/default.nix` for packages or `pkgs/<name>/default.nix` for applications
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Haskell package. This is passed as the first argument to `meta.getSource`.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are also passed to nixpkgs `haskellPackages.mkDerivation` function. Refer to [its source](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) for more information. The most important arguments are:
+  - `isExecutable` (boolean, default `false`): Turn this on if the package is an application and lives in `pkgs/<name>/default.nix`.
+  - `buildDepends` (list of Haskell packages, default `[]`): The dependencies of this package
+
+#### Returns
+A derivation containing:
+- A Haskell package suitable for use as a dependency of other Haskell packages
+- If `isExecutable = true`, all binaries specified by the Haskell package
+
+#### Versions
+Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+- The channel result will contain this package for all supported Haskell versions
+- The builder automatically uses the correct Haskell version
+
+Haskell applications declared with this function in `./pkgs` can choose the version:
+- `flox.haskellPackages.mkDerivation`: Uses the default Haskell version of nixpkgs (currently Haskell GHC 8.8.x)
+- `flox.haskell.packages.ghcXXX.mkDerivation`: Uses GHC version XXX, e.g. `ghc865` for GHC 8.6.5 or `ghc882` for GHC 8.8.2. Only versions available in nixpkgs are supported, and this will change over time.
