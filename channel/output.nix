@@ -291,6 +291,10 @@ let
         channel = myArgs.name;
         channelSourceOverrides = sourceOverrides.${myArgs.name} or {};
       };
+      getBuilderSource = pkgs.callPackage ./getSource.nix {
+        channel = parentArgs.name;
+        channelSourceOverrides = sourceOverrides.${parentArgs.name} or {};
+      };
       inherit withVerbosity;
     };
   };

@@ -11,7 +11,7 @@
 
 # Actually create the derivation.
 buildGoModule ( args // rec {
-  inherit (meta.getSource project args) version autoversion src name src_json;
+  inherit (meta.getBuilderSource project args) version autoversion src name src_json;
 
   # Go development in Nix at flox follows the convention of injecting the
   # version string at build time using ldflags. Nix will deduce the version for

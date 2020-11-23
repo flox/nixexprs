@@ -11,7 +11,7 @@
 
 # Actually create the derivation.
 buildPerlPackage ( args // {
-  inherit (meta.getSource project args) version src pname src_json;
+  inherit (meta.getBuilderSource project args) version src pname src_json;
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''

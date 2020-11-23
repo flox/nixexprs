@@ -19,7 +19,7 @@ builtins.trace (
 
 # Actually create the derivation.
 pythonPackages.buildPythonApplication ( args // {
-  inherit (meta.getSource project args) version src pname src_json;
+  inherit (meta.getBuilderSource project args) version src pname src_json;
   # Add tools for development environment only.
   nativeBuildInputs = nativeBuildInputs ++ [
     pythonPackages.ipython

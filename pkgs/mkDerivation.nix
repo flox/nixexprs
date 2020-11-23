@@ -10,7 +10,7 @@
 
 # Actually create the derivation.
 stdenv.mkDerivation ( args // {
-  inherit (meta.getSource project args) version src name;
+  inherit (meta.getBuilderSource project args) version src name;
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''

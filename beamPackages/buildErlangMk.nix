@@ -17,7 +17,7 @@ beamPackages.buildErlangMk ( args // rec {
   # build-erlang-mk.nix re-appends the version to the name,
   # so we need to not inherit name and instead pass what we
   # call "pname" as "name".
-  inherit (meta.getSource project args) version src pname src_json;
+  inherit (meta.getBuilderSource project args) version src pname src_json;
   name = pname;
 
   # Create .flox.json file in root of package dir to record
