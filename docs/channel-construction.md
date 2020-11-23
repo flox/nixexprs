@@ -16,7 +16,26 @@ The result of this function call is _another_ function, with arguments that all 
 
 The result of this function call are the channel outputs, as determined by mainly `topdir`. See [channel structure](#channelstructure) for details.
 
-## `topdir` Structure
+## `topdir` structure
+
+The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). Each subdirectory allows specifying a package set where each package has a <name> corresponding to the file it is defined in.
+
+### Toplevel
+
+**Paths:** `pkgs/<name>/default.nix` or `pkgs/<name>.nix`
+
+**Output attribute path**: `<name>`
+
+### Package sets
+
+| Package set | Paths | Output attribute paths |
+| --- | --- | --- |
+| Python | `pythonPackages/<name>/default.nix` or `pythonPackages/<name>.nix` | `pythonPackages.<name>`, `python2Packages.<name>`, `python3Packages.<name>`, `python27Packages.<name>`, `python37Packages.<name>`, etc. |
+| Perl | `perlPackages/<name>/default.nix` or `perlPackages/<name>.nix` | `perlPackages.<name>`, `perl530Packages.<name>`, `perl532Packages.<name>` |
+| Haskell | `haskellPackages/<name>/default.nix` or `haskellPackages/<name>.nix` | `haskellPackages.<name>`, `haskell.packages.ghc865.<name>`, `haskell.packages.ghc882.<name>`, etc. |
+| Erlang | `beamPackages/<name>/default.nix` or `beamPackages/<name>.nix` | `beamPackages.<name>`, `beam.packages.erlangR18.<name>`, `beam.packages.erlangR19.<name>`, etc. |
+
+### Deep overrides
 
 TODO
 
