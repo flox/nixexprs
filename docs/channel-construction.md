@@ -61,7 +61,7 @@ In addition, for all package sets in [above table](#subdirectories) that have a 
 
 ### Meta set
 
-#### `meta.getSource <project> <overrides>`
+#### `getSource <project> <overrides>`
 
 Gets an auto-updating reference to GitHub repository `<project>` of the current channel, allowing certain overrides of behavior with the `<overrides>` argument.
 
@@ -87,11 +87,11 @@ An attribute set with attributes:
 - `autoversion` (version string): The automatically generated version string, a combination of the `origversion` and the Git revision and therefore non-ambiguous
 - `src_json` (json string): A json string encoding the source used
 
-#### `meta.getBuildSource <project> <overrides>`
+#### `getBuildSource <project> <overrides>`
 
 Gets an auto-updating reference to GitHub repository `<project>` of the _importing_ channel, allowing certain overrides of behavior with the `<overrides>` argument. Since this gets sources from the channel that imports this one, it is useful for declaring custom builders.
 
-See [`meta.getSource`](#metagetsource-project-overrides) for details on arguments and return value.
+See [`getSource`](#getsource-project-overrides) for details on arguments and return value.
 
 #### `withVerbosity <verbosity> <fun> <arg>`
 
