@@ -3,7 +3,7 @@
 The entry point for channel construction is `<flox/channel>`, corresponding to [`flox/channel/default.nix`](../channel/default.nix). This function takes a set of arguments intended to be passed via a channels `default.nix` file. These are:
 
 - `name` (string, default inferred): The name of the channel. If not specified, the name is inferred from a number of heuristics.
-- `topdir` (path, required): The path to the channel root. Usually just `./.`, indicating that the channel lives in the same directory as the file importing `<flox/channel>`. This directory is used to determine all outputs of the channel. See [`topdir` structure](#topdirstructure) for details.
+- `topdir` (path, required): The path to the channel root. Usually just `./.`, indicating that the channel lives in the same directory as the file importing `<flox/channel>`. This directory is used to determine all outputs of the channel. See below section for details.
 - `extraOverlays` (list of nixpkgs overlays, default `[]`): Extra [nixpkgs overlays](https://nixos.org/manual/nixpkgs/stable/#sec-overlays-definition) to apply to the channel and its dependent channels.
 
 The result of this function call is _another_ function, with arguments that all have default values. This allows evaluation of the channels `default.nix` via `nix-build -A`, but also allows customizing the arguments if necessary. This function has these arguments:
@@ -22,13 +22,11 @@ The result of this function call is _another_ function, with arguments that all 
 - `_return` (internal): Internal return value of the channel creation. Used to implement dependencies on other channels
 - `_isFloxChannel` (internal): Unused argument that hints that this is a Flox channel. This is used to discover Flox channels from `NIX_PATH`
 
-The result of this function call are the channel outputs, as determined by mainly `topdir`. See [channel structure](#topdirstructure) for details.
+The result of this function call are the channel outputs, as determined by mainly `topdir`. See below section for details.
 
-## `topdir` structure
+## `topdir` subdirectories
 
 The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). Each subdirectory allows specifying a package set where each package has a <name> corresponding to the file it is defined in.
-
-### Subdirectories
 
 | Package set | Call scope attribute | Paths | Output attribute paths |
 | --- | --- | --- | --- |
@@ -40,7 +38,7 @@ The channel creation mechanism looks at a number of subdirectories of `topdir` t
 
 All of these subdirectories also support declaring packages as deep overriding by creating `*/<name>/deep-override`, which only works for the `*/<name>/default.nix` forms, not `*/<name>.nix`.
 
-### Call scope
+## Call scope
 
 All paths in `*/<name>/default.nix` and `*/<name>.nix` are auto-called with a scope containing these attributes in increasing priority:
 - All attributes of nixpkgs and its `xorg` set, so `pkgs.*` and `pkgs.xorg.*`
@@ -57,7 +55,7 @@ All paths in `*/<name>/default.nix` and `*/<name>.nix` are auto-called with a sc
 - `flox`: A convenience alias to `channels.flox` for accessing the Flox channels outputs
 - `<name>`: The package in nixpkgs of the same name as the one defined. This allows package overriding without getting infinite recursion
 
-In addition, for all package sets in [above table](#subdirectories) that have a call scope attribute `<attr>`, the following are in scope as well:
+In addition, for all package sets in [above table](#subdirectories) that have a call scope attribute `<attr>`, the following version-agnostic attributes are in scope as well. See [version-agnosticism](version-agnosticism.md) for more info.
 - `<attr>`: A version-agnostic package set consisting of:
   - The packages in nixpkgs
   - This channels packages

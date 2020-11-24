@@ -20,7 +20,7 @@ Creates a package using nixpkgs standard environment builder. Use this for C/C++
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this package. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `stdenv.mkDerivation` function. Refer to the [standard environment documentation](https://nixos.org/manual/nixpkgs/stable/#chap-stdenv) for more information. The most important arguments are:
   - `buildInputs` (list of packages, default `[]`): Package dependencies, e.g. dynamic libraries
   - `nativeBuildInputs` (list of packages, default `[]`): Build-time dependencies, such as e.g. `cmake` or `pkg-config`
@@ -39,7 +39,7 @@ Creates a Python package from an auto-updating reference to a repository.
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Python package. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `pythonPackages.buildPythonPackage` function. Refer to [its full documentation](https://nixos.org/manual/nixpkgs/stable/#buildpythonpackage-function) for more information. The most important arguments are:
   - `propagatedBuildInputs` (list of Python package derivations, default `[]`): Python runtime dependencies
   - `checkInputs` (list of Python package derivations, default `[]`): Python test dependencies
@@ -50,7 +50,7 @@ A derivation containing:
 - All binaries or other outputs declared by the Python package, e.g. by `entry_points` in `setup.py`
 
 #### Versions
-Python packages declared with this function in `./pythonPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+Python packages declared with this function in `./pythonPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Python versions
 - The builder automatically uses the correct Python version
 
@@ -81,7 +81,7 @@ Creates a Perl package or application from an auto-updating reference to a repos
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Perl package. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `perlPackages.buildPerlPackage` function. Refer to [nixpkgs Perl packaging documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-perl-packaging) for more information. The most important arguments are:
   - `propagatedBuildInputs` (list of Perl package derivations, default `[]`): Perl dependencies
 
@@ -91,7 +91,7 @@ A derivation containing:
 - All binaries or other outputs declared by the Perl package, e.g. by `install_script` in `Makefile.PL`
 
 #### Versions
-Perl packages declared with this function in `./perlPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+Perl packages declared with this function in `./perlPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Perl versions
 - The builder automatically uses the correct Perl version
 
@@ -107,7 +107,7 @@ Creates a Go application from an auto-updating reference to a repository using G
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `buildGoModule` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) for more information. The most important arguments are:
   - `vendorSha256` (string or null, mandatory): The hash of all the dependencies, or `null` if the package vendors dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
 
@@ -126,7 +126,7 @@ Creates a Go application from an auto-updating reference to a repository. Can be
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `buildGoPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) for more information. The most important arguments are:
   - `goPackagePath` (string, mandatory): The package's canonical Go import path.
   - `goDeps` (path, mandatory): Path to `deps.nix` file containing package dependencies. For a project using Go modules, this can be generated with [vgo2nix](https://github.com/nix-community/vgo2nix), for other projects [go2nix](https://github.com/kamilchm/go2nix) can be used.
@@ -146,7 +146,7 @@ Creates a Rust application from an auto-updating reference to a repository.
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Rust application. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `rustPlatform.buildRustPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) for more information. One of the following arguments is needed for specifying the dependencies:
   - `cargoSha256` (string): The hash of all dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
   - `cargoVendorDir` (path): An alternative to `cargoSha256`, which can be used if dependencies are vendored with `cargo vendor`. Pass the path to the `vendor` directory with this option.
@@ -166,7 +166,7 @@ Creates a Haskell package or application from an auto-updating reference to a re
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Haskell package. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `haskellPackages.mkDerivation` function. Refer to [its source](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) for more information. The most important arguments are:
   - `isExecutable` (boolean, default `false`): Turn this on if the package is an application and lives in `pkgs/<name>/default.nix`.
   - `buildDepends` (list of Haskell packages, default `[]`): The dependencies of this package
@@ -177,7 +177,7 @@ A derivation containing:
 - If `isExecutable = true`, all binaries specified by the Haskell package
 
 #### Versions
-Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Haskell versions
 - The builder automatically uses the correct Haskell version
 
@@ -193,7 +193,7 @@ Creates an Erlang package or application from an auto-updating reference to a re
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Erlang package. This is passed as the first argument to `meta.getSource`.
-- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](TODO) for how the source can be influenced with this.
+- All other arguments are passed as the second argument to `meta.getSource`. See [its documentation](get-source.md) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `beamPackages.buildErlangMk` function. Refer to [its source](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/beam-modules/build-erlang-mk.nix) for more information. The most important arguments are:
   - `beamDeps` (list of beam packages, default `[]`): The Erlang dependencies of this package
 
@@ -203,7 +203,7 @@ A derivation containing:
 - All binaries specified by the Erlang package
 
 #### Versions
-Erlang packages declared with this function in `./beamPackages` are version-agnostic. See TODO for more info on version-agnostic definitions. This means:
+Erlang packages declared with this function in `./beamPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Erlang versions
 - The builder automatically uses the correct Erlang version
 
