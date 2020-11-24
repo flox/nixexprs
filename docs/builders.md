@@ -50,7 +50,7 @@ A derivation containing:
 - All binaries or other outputs declared by the Python package, e.g. by `entry_points` in `setup.py`
 
 #### Versions
-Python packages declared with this function in `./pythonPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
+Python packages declared with this function in `./pythonPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Python versions
 - The builder automatically uses the correct Python version
 
@@ -91,7 +91,7 @@ A derivation containing:
 - All binaries or other outputs declared by the Perl package, e.g. by `install_script` in `Makefile.PL`
 
 #### Versions
-Perl packages declared with this function in `./perlPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
+Perl packages declared with this function in `./perlPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Perl versions
 - The builder automatically uses the correct Perl version
 
@@ -177,7 +177,7 @@ A derivation containing:
 - If `isExecutable = true`, all binaries specified by the Haskell package
 
 #### Versions
-Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
+Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Haskell versions
 - The builder automatically uses the correct Haskell version
 
@@ -203,7 +203,7 @@ A derivation containing:
 - All binaries specified by the Erlang package
 
 #### Versions
-Erlang packages declared with this function in `./beamPackages` are version-agnostic. See [version agnosticism](version-agnosticism.md) for more info on version-agnostic definitions. This means:
+Erlang packages declared with this function in `./beamPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Erlang versions
 - The builder automatically uses the correct Erlang version
 
