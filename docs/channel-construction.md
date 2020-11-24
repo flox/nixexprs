@@ -9,7 +9,7 @@ The entry point for channel construction is `<flox/channel>`, corresponding to [
 The result of this function call is _another_ function, with arguments that all have default values. This allows evaluation of the channels `default.nix` via `nix-build -A`, but also allows customizing the arguments if necessary. This function has these arguments:
 
 - `name` (string, default inferred): Another way to pass the name of the channel. If not specified, the name is inferred from a number of heuristics. If `name` is passed in the previous function call, that takes precedence over this one.
-- `debugVerbosity` (integer, default 0): The level of debug information to display during evaluation. A value of 10 should display pretty much everything, while 0 should display nothing. Very useful for debugging infinite recursion errors.
+- `debugVerbosity` (integer, default 0): The level of debug information to display during evaluation. A value of 10 should display everything, while 0 should display nothing. Very useful for debugging infinite recursion errors. See [`withVerbosity`](#withverbosity-verbosity-fun-arg) for more details.
 - `sourceOverrideJson` (JSON string, default `{}`): A JSON string for specifying source overrides of projects.
   This is of the form
   ```json
@@ -19,8 +19,8 @@ The result of this function call is _another_ function, with arguments that all 
     }
   }
   ```
-- `_return` (internal): Internal return value of the channel creation. Used to implement dependencies on other channels
-- `_isFloxChannel` (internal): Unused argument that hints that this is a Flox channel. This is used to discover Flox channels from `NIX_PATH`
+- `_return` (internal, unstable): Internal return value of the channel creation. Used to implement dependencies on other channels
+- `_isFloxChannel` (internal, unstable): Unused argument that hints that this is a Flox channel. This is used to discover Flox channels from `NIX_PATH`
 
 The result of this function call are the channel outputs, as determined by mainly `topdir`. See below section for details.
 
@@ -43,13 +43,7 @@ All of these subdirectories also support declaring packages as deep overriding b
 All paths in `*/<name>/default.nix` and `*/<name>.nix` are auto-called with a scope containing these attributes in increasing priority:
 - All attributes of nixpkgs and its `xorg` set, so `pkgs.*` and `pkgs.xorg.*`
 - All of this channels output attributes, merged into the above set
-- `meta`: An attribute set containing
-  - `meta.getSource <project> <overrides>`: A function for getting sources of the current channel, see [`getSource`](get-source.md)
-  - `meta.getBuilderSource <project> <overrides>`: A function for getting sources of the channel that imports the current channel, see [`getSource`](get-source.md). This is useful to define builders reusable by other channels.
-  - `meta.withVerbosity <verbosity> <f> <a>`: A function that allows printing debug information based on verbosity level configured with the `debugVerbosity` argument. The parameters are:
-    - `<verbosity>` (integer): The minimum verbosity level to trigger for
-    - `<f>` (function): The function to apply in case the verbosity level is high enough. The result of this function call is returned if this is the case.
-    - `<a>` (anything): The value to pass to the function. If the verbosity level is not high enough, this value is returned directly.
+- `meta`: An attribute set containing some utility functions. See [meta set](#meta-set) for more info.
 - `channels`: An attribute set containing the outputs of all other available channels:
   - `channels.<channel>.<output>`: Output attribute `<output>` of channel `<channel>`
 - `flox`: A convenience alias to `channels.flox` for accessing the Flox channels outputs
@@ -64,3 +58,59 @@ In addition, for all package sets in [above table](#subdirectories) that have a 
 - `channels`: An attribute set containing the outputs of all other available channels:
   - `channels.<channel>.<output>`: Output attribute `<output>` of channel `<channel>`
   - `channels.<channel>.<attr>`: A version-agnostic package set for that channel
+
+### Meta set
+
+#### `meta.getSource <project> <overrides>`
+
+Gets an auto-updating reference to GitHub repository `<project>` of the current channel, allowing certain overrides of behavior with the `<overrides>` argument.
+
+##### Argument `<project>` (string)
+
+The project/repository to get the source for
+
+##### Argument `<overrides>` (attribute set)
+
+- `rev` (string, default `"master"`): A Git revision or branch to use for the source
+- `version` (string, default from GitHub): The version string to use for the source
+- `src` (string, default from GitHub): The path to the source, overrides the one from GitHub
+- `pname` (string, default project name): The package name
+
+##### Returns
+An attribute set with attributes:
+- `project` (string): The project passed with the `<project>` argument. Intended to be used as a passthru of the derivation such that the projects can be inferred from channel outputs
+- `pname` (string): The package name, intended to be passed to nixpkgs builders
+- `version` (version string): The package version, intended to be passed to nixpkgs builders
+- `name` (string): `pname + "-" + version`, intended to be passed to nixpkgs builders that don't support `pname` and `version` separately
+- `src` (path): The path to the resulting source
+- `origversion` (version string): The original version as specified by the GitHub source. This string can be ambiguous across versions.
+- `autoversion` (version string): The automatically generated version string, a combination of the `origversion` and the Git revision and therefore non-ambiguous
+- `src_json` (json string): A json string encoding the source used
+
+#### `meta.getBuildSource <project> <overrides>`
+
+Gets an auto-updating reference to GitHub repository `<project>` of the _importing_ channel, allowing certain overrides of behavior with the `<overrides>` argument. Since this gets sources from the channel that imports this one, it is useful for declaring custom builders.
+
+See [`meta.getSource`](#metagetsource-project-overrides) for details on arguments and return value.
+
+#### `withVerbosity <verbosity> <fun> <arg>`
+
+##### Argument `<verbosity>` (integer)
+
+The minimum verbosity level to trigger for. The verbosity levels are roughly meant for:
+- 0: The default level, should only be used for warnings, so that normal evaluation doesn't trigger it
+- 1-3: For debug messages that are infrequent, such that if the user sets `debugVerbosity` to one of these, only a handful of messages are printed
+- 4-7: For debug messages that are somewhat more frequent
+- 8-10: For debug messages that are very frequent, these can really litter the output
+
+##### Argument `<fun>` (function)
+
+The function to call on `<arg>` if `debugVerbosity` is above or equal to the passed `<verbosity>`. For static debug messages this is usually `builtins.trace "some static message"`. Messages can also depend on the `<arg>` to do more complicated outputs like `arg: builtins.trace "Argument is ${arg}" arg`.
+
+##### Argument `<arg>` (anything)
+
+The argument to pass to `<fun>` if `debugVerbosity` is above or equal to the passed `<verbosity>`. Otherwise this is the return value of the function.
+
+##### Returns
+- If `debugVerbosity` is greater or equal than `<verbosity>`, returns `<arg>` applied to `<fun>`
+- Otherwise returns `<arg>`
