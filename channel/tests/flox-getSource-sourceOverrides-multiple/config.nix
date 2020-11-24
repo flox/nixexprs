@@ -1,4 +1,4 @@
-{ pkgs }:
+{ pkgs, nixpkgs, repo }:
 let
   testRepo = pkgs.runCommandNoCC "repo" {} ''
     mkdir $out
@@ -11,16 +11,18 @@ let
     cp -r ${./repoDotGit} $out/.git
   '';
 in {
-  args = [ "--eval" "--strict" "--arg" "testRepo" testRepo "--arg" "otherRepo" otherRepo ./expression.nix ];
+  type = "eval-strict";
+  stringArgs.testRepo = testRepo;
+  stringArgs.otherRepo = otherRepo;
   exitCode = 0;
-  nixPath = { nixpkgs, flox }: [
+  nixPath = [
     {
       prefix = "nixpkgs";
       path = nixpkgs;
     }
     {
       prefix = "flox";
-      path = flox;
+      path = repo;
     }
     {
       prefix = "";

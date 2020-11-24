@@ -17,8 +17,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: cachix/install-nix-action@v12
-    - name: Running tests
-      run: nix-build channel/tests -k
+    - name: Building test script
+      run: nix-build channel/tests
+    - name: Running test script
+      run: ./result
 
   codespell:
     name: Codespell

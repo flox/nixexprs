@@ -1,14 +1,16 @@
+{ nixpkgs, repo }:
 {
-  args = [ "--eval" ./expression.nix "--arg" "dir" ./channels/test ];
+  type = "eval";
+  stringArgs.dir = "${./channels/test}";
   exitCode = 0;
-  nixPath = { nixpkgs, flox }: [
+  nixPath = [
     {
       prefix = "nixpkgs";
       path = nixpkgs;
     }
     {
       prefix = "flox";
-      path = flox;
+      path = repo;
     }
   ];
 }

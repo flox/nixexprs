@@ -1,4 +1,4 @@
-{ pkgs }:
+{ pkgs, nixpkgs, repo }:
 let
   channel = pkgs.runCommandNoCC "test-channel" {
     nativeBuildInputs = [ pkgs.gitMinimal ];
@@ -13,16 +13,17 @@ let
     git -C $out remote add fake2 git@github.com:foo/not-nixexprs.git
   '';
 in {
-  args = [ "--eval" ./expression.nix "--arg" "dir" channel ];
+  type = "eval";
+  stringArgs.dir = channel;
   exitCode = 0;
-  nixPath = { nixpkgs, flox }: [
+  nixPath = [
     {
       prefix = "nixpkgs";
       path = nixpkgs;
     }
     {
       prefix = "flox";
-      path = flox;
+      path = repo;
     }
   ];
 }
