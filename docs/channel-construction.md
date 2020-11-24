@@ -87,7 +87,7 @@ An attribute set with attributes:
 - `autoversion` (version string): The automatically generated version string, a combination of the `origversion` and the Git revision and therefore non-ambiguous
 - `src_json` (json string): A json string encoding the source used
 
-#### `getBuildSource <project> <overrides>`
+#### `getBuilderSource <project> <overrides>`
 
 Gets an auto-updating reference to GitHub repository `<project>` of the _importing_ channel, allowing certain overrides of behavior with the `<overrides>` argument. Since this gets sources from the channel that imports this one, it is useful for declaring custom builders.
 
