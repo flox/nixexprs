@@ -43,10 +43,12 @@ let
         , stringArgs ? {}
         , stdoutMatchPath ? path + "/stdout"
         , stderrMatchPath ? path + "/stderr"
+        , nixOptions ? {}
+        , postCommands ? []
         , overrideDerivation ? null
         , override ? null
         }: {
-          inherit type exitCode nixPath file stringArgs stdoutMatchPath stderrMatchPath;
+          inherit type exitCode nixPath file stringArgs stdoutMatchPath stderrMatchPath nixOptions postCommands;
         };
     in checker unchecked;
 
@@ -62,8 +64,10 @@ let
 
       nixPath = "NIX_PATH=${lib.escapeShellArg (createNixPath config.nixPath)}";
 
-      args = lib.mapAttrsToList (name: value: "--arg ${lib.escapeShellArg name} ${lib.escapeShellArg value}") config.stringArgs;
-    in "${nixPath} ${base} ${config.file} ${lib.concatStringsSep " " args}";
+      args = lib.mapAttrsToList (name: value: "--argstr ${lib.escapeShellArg name} ${lib.escapeShellArg value}") config.stringArgs;
+
+      options = lib.mapAttrsToList (name: value: "--option ${lib.escapeShellArg name} ${lib.escapeShellArg value}") config.nixOptions;
+    in "${nixPath} ${base} ${config.file} ${lib.concatStringsSep " " args} ${lib.concatStringsSep " " options}";
 
   /*
   Returns a script that runs a test. Assumes a usable nix is in PATH
@@ -102,7 +106,7 @@ let
         exit 1
       }
 
-      echo "${command}"
+      echo ${lib.escapeShellArg command}
       set +e
       ${command} >stdout 2>stderr
       exitCode=$?
@@ -114,6 +118,15 @@ let
       fi
       ${check config.stdoutMatchPath "stdout"}
       ${check config.stderrMatchPath "stderr"}
+
+      ${lib.concatMapStringsSep "\n" (postCommand: ''
+        echo ${lib.escapeShellArg postCommand}
+        if ! ${postCommand} >stdout 2>stderr; then
+          echo -e '\033[0;31m'
+          echo "Post command failed"
+          fail
+        fi
+      '') config.postCommands}
       echo "Test ${name} succeeded"
     '';
 
