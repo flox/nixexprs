@@ -14,6 +14,8 @@
 
 ## `flox.mkDerivation`
 
+[(source)](../pkgs/mkDerivation.nix)
+
 Creates a package using nixpkgs standard environment builder. Use this for C/C++ projects.
 
 **For files:** `pkgs/<name>/default.nix`
@@ -34,6 +36,8 @@ A derivation containing whatever was installed with the standard phases.
 As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 ## `flox.pythonPackages.buildPythonPackage`
+
+[(source)](../pythonPackages/buildPythonPackage.nix)
 
 Creates a Python package from an auto-updating reference to a repository.
 
@@ -60,6 +64,8 @@ Python packages declared with this function in `./pythonPackages` are version-ag
 
 ## `flox.pythonPackages.buildPythonApplication`
 
+[(source)](../pythonPackages/buildPythonApplication.nix)
+
 Creates a Python application from an auto-updating reference to a repository. Note that this function doesn't return any Python modules, making in unfit for use in `pythonPackages/<name>/default.nix`.
 
 **For files:** `pkgs/<name>/default.nix`
@@ -80,6 +86,8 @@ As with all builders, the derivation also exports a `.project` attribute which i
 - In addition, specific minor Python versions supported by nixpkgs can be used, such as `python37Packages`, `python39Packages`, etc. However support for these might disappear over time.
 
 ## `flox.perlPackages.buildPerlPackage`
+
+[(source)](../perlPackages/buildPerlPackage.nix)
 
 Creates a Perl package or application from an auto-updating reference to a repository.
 
@@ -109,6 +117,8 @@ Perl applications declared with this function in `./pkgs` can choose the version
 
 ## `flox.buildGoModule`
 
+[(source)](../pkgs/buildGoModule.nix)
+
 Creates a Go application from an auto-updating reference to a repository using Go modules (having a `go.mod` file).
 
 **For files:** `pkgs/<name>/default.nix`
@@ -133,6 +143,8 @@ As with all builders, the derivation also exports a `.project` attribute which i
 This function is only available for the default Go version of nixpkgs `buildGoModule` function, which is currently Go 1.15.x
 
 ## `flox.buildGoPackage`
+
+[(source)](../pkgs/buildGoPackage.nix)
 
 Creates a Go application from an auto-updating reference to a repository. Can be used for both projects using Go modules and ones that don't.
 
@@ -160,6 +172,8 @@ This function is only available for the default Go version of nixpkgs `buildGoPa
 
 ## `flox.buildRustPackage`
 
+[(source)](../pkgs/buildRustPackage.nix)
+
 Creates a Rust application from an auto-updating reference to a repository.
 
 **For files:** `pkgs/<name>/default.nix`
@@ -181,6 +195,8 @@ As with all builders, the derivation also exports a `.project` attribute which i
 This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
 
 ## `flox.haskellPackages.mkDerivation`
+
+[(source)](../haskellPackages/mkDerivation.nix)
 
 Creates a Haskell package or application from an auto-updating reference to a repository.
 
@@ -210,6 +226,8 @@ Haskell applications declared with this function in `./pkgs` can choose the vers
 - `flox.haskell.packages.ghcXXX.mkDerivation`: Uses GHC version XXX, e.g. `ghc865` for GHC 8.6.5 or `ghc882` for GHC 8.8.2. Only versions available in nixpkgs are supported, and this will change over time.
 
 ## `flox.beamPackages.buildErlangMk`
+
+[(source)](../beamPackages/buildErlangMk.nix)
 
 Creates an Erlang package or application from an auto-updating reference to a repository.
 
