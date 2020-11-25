@@ -29,7 +29,9 @@ Creates a package using nixpkgs standard environment builder. Use this for C/C++
   - `installPhase` (string, default ~`make install`): Command to run for installing the package
 
 #### Returns
-A derivation containing whatever was installed with the standard phases
+A derivation containing whatever was installed with the standard phases.
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 ## `flox.pythonPackages.buildPythonPackage`
 
@@ -49,6 +51,8 @@ A derivation containing:
 - A Python package suitable for use as a dependency of other Python packages
 - All binaries or other outputs declared by the Python package, e.g. by `entry_points` in `setup.py`
 
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+
 #### Versions
 Python packages declared with this function in `./pythonPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
 - The channel result will contain this package for all supported Python versions
@@ -66,6 +70,8 @@ See [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpac
 #### Returns
 A derivation containing:
 - All binaries or other outputs declared by the Python package, e.g. by `entry_points` in `setup.py`
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 #### Versions
 - `flox.pythonPackages.buildPythonApplication`: Uses the default Python version of nixpkgs (currently 2.x.x)
@@ -89,6 +95,8 @@ Creates a Perl package or application from an auto-updating reference to a repos
 A derivation containing:
 - A Perl package suitable for use as a dependency of other Perl packages
 - All binaries or other outputs declared by the Perl package, e.g. by `install_script` in `Makefile.PL`
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 #### Versions
 Perl packages declared with this function in `./perlPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
@@ -115,6 +123,8 @@ Creates a Go application from an auto-updating reference to a repository using G
 A derivation containing:
 - The binaries declared by the Go package
 
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+
 #### Versions
 This function is only available for the default Go version of nixpkgs `buildGoModule` function, which is currently Go 1.15.x
 
@@ -134,6 +144,8 @@ Creates a Go application from an auto-updating reference to a repository. Can be
 #### Returns
 A derivation containing:
 - The binaries declared by the Go package
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 #### Versions
 This function is only available for the default Go version of nixpkgs `buildGoPackage` function, which is currently Go 1.15.x
@@ -155,6 +167,8 @@ Creates a Rust application from an auto-updating reference to a repository.
 A derivation containing:
 - The binaries declared by the Rust package
 
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+
 #### Versions
 This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
 
@@ -175,6 +189,8 @@ Creates a Haskell package or application from an auto-updating reference to a re
 A derivation containing:
 - A Haskell package suitable for use as a dependency of other Haskell packages
 - If `isExecutable = true`, all binaries specified by the Haskell package
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 #### Versions
 Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
@@ -201,6 +217,8 @@ Creates an Erlang package or application from an auto-updating reference to a re
 A derivation containing:
 - An Erlang package suitable for use as a dependency of other Erlang packages
 - All binaries specified by the Erlang package
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
 
 #### Versions
 Erlang packages declared with this function in `./beamPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
