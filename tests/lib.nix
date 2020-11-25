@@ -102,6 +102,7 @@ let
         cat stdout
         echo "stderr is"
         cat stderr
+        echo "Directory is $PWD"
         echo -e "Test ${name} failed\033[0m"
         exit 1
       }
