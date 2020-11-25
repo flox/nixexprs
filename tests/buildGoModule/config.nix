@@ -16,7 +16,7 @@
     }
   ];
   postCommands = [
-    "result/bin/hello"
+    "grep master-r1 <(result/bin/hello)"
     "grep rev1 result/.flox.json"
   ];
 }
