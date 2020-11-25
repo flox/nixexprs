@@ -115,6 +115,10 @@ Creates a Go application from an auto-updating reference to a repository using G
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application. This is passed as the `<project>` argument to `meta.getBuilderSource`.
+  - The project version can be accessed from Go code by adding the following to the `main` package:
+    ```go
+    var nixVersion string
+    ```
 - All other arguments are passed as the `<overrides>` argument to `meta.getBuilderSource`. See [its documentation](channel-construction.md#getbuildersource-project-overrides) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `buildGoModule` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) for more information. The most important arguments are:
   - `vendorSha256` (string or null, mandatory): The hash of all the dependencies, or `null` if the package vendors dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
@@ -136,6 +140,10 @@ Creates a Go application from an auto-updating reference to a repository. Can be
 
 #### Inputs
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Go application. This is passed as the `<project>` argument to `meta.getBuilderSource`.
+  - The project version can be accessed from Go code by adding the following to the `main` package:
+    ```go
+    var nixVersion string
+    ```
 - All other arguments are passed as the `<overrides>` argument to `meta.getBuilderSource`. See [its documentation](channel-construction.md#getbuildersource-project-overrides) for how the source can be influenced with this.
 - All other arguments are also passed to nixpkgs `buildGoPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) for more information. The most important arguments are:
   - `goPackagePath` (string, mandatory): The package's canonical Go import path.
