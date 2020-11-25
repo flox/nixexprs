@@ -1,0 +1,19 @@
+{
+  "branches": {
+    "master": "rev1"
+  },
+  "srcs": {
+    "rev1": {
+      "url": "testPackage",
+      "rev": "rev1",
+      "date": "2020-11-25T14:48:27+00:00",
+      "path": "/nix/store/pxg064vxn14h0nrw2kdcrggc2bd3rv2d-repo",
+      "sha256": "1cl8c0s24kd5r7mgzdwkf7qr6zqpa4vxzb55yw7lkk5hwjmjb7lz",
+      "fetchSubmodules": false,
+      "deepClone": false,
+      "leaveDotGit": false,
+      "version": "master",
+      "revision": 1
+    }
+  }
+}

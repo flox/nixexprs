@@ -1,14 +1,15 @@
+{ nixpkgs, repo }: 
 {
-  args = [ "--eval" "--strict" ./expression.nix ];
+  type = "eval-strict";
   exitCode = 0;
-  nixPath = { nixpkgs, flox }: [
+  nixPath = [
     {
       prefix = "nixpkgs";
       path = nixpkgs;
     }
     {
       prefix = "flox";
-      path = flox;
+      path = repo;
     }
     {
       prefix = "";
