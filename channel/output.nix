@@ -2,9 +2,23 @@
 # TODO: Add debug logs
 { pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides }:
 let
-  # TODO: Pregenerate a JSON from this
-  packageSets = import ./package-sets.nix { nixpkgs = <nixpkgs>; };
   inherit (pkgs) lib;
+
+  pregenPath = toString (<nixpkgs-meta> + "/package-sets.json");
+  pregenResult =
+    if builtins.pathExists pregenPath
+    then lib.importJSON pregenPath
+    else lib.warn "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slow"
+      (import ./package-sets.nix {
+        inherit lib;
+        pregenerate = true;
+        nixpkgs = <nixpkgs>;
+      });
+
+  packageSets = import ./package-sets.nix {
+    inherit lib pregenResult;
+    pregenerate = false;
+  };
 
 
   # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though

@@ -1,9 +1,21 @@
-{ nixpkgs ? <nixpkgs> }:
+{ lib ? import <nixpkgs/lib>
+, pregenerate ? true
+# Should only be used during pregeneration
+, nixpkgs ? throw "No nixpkgs passed"
+, pregenResult ? throw "No pregenResult passed"
+}:
+/*
+If pregenerate, returns only the fields which can be serialized to json
+Otherwise, checks if the serializable parts are already pregenerated and merges them with the non-serializable ones
+*/
+
 let
-  pkgs = import nixpkgs { config = {}; overlays = []; };
+  nixpkgs' = assert pregenerate; nixpkgs;
+
+  pkgs = import nixpkgs' { config = {}; overlays = []; };
+
   # This is used to determine whether nixpkgs hydra builds certain package sets
-  releasePkgs = import (nixpkgs + "/pkgs/top-level/release.nix") {};
-  inherit (pkgs) lib;
+  releasePkgs = import (nixpkgs' + "/pkgs/top-level/release.nix") {};
 
   /*
   This function turns the attributes of each package set into a structure like
@@ -23,7 +35,7 @@ let
       };
     }
   */
-  packageSet = { versionForPackageSet, attrPathForVersion, packageSetAttrPaths, callScopeAttr, deepOverride }:
+  packageSet = setName: { versionForPackageSet, attrPathForVersion, packageSetAttrPaths, callScopeAttr, deepOverride }:
     let
 
       addVersion = path:
@@ -56,11 +68,14 @@ let
 
       versions = lib.filterAttrs (version: res: res != null) (lib.mapAttrs annotateVersionPaths versionPaths);
 
-    in {
-      inherit versions callScopeAttr deepOverride;
+    in if pregenerate then {
+      inherit versions;
+    } else {
+      inherit (pregenResult.${setName}) versions;
+      inherit callScopeAttr deepOverride;
     };
 
-in {
+in lib.mapAttrs packageSet {
 
   /*
   Each entry here needs these attributes:
@@ -76,7 +91,7 @@ in {
     Takes two package sets and deeply overrides the former to use all dependencies from the latter
   */
 
-  haskell = packageSet {
+  haskell = {
 
     versionForPackageSet = set: set.ghc.version or null;
 
@@ -105,7 +120,7 @@ in {
 
   };
 
-  erlang = packageSet {
+  erlang = {
 
     versionForPackageSet = set: set.erlang.version or null;
 
@@ -132,7 +147,7 @@ in {
 
   };
 
-  python = packageSet {
+  python = {
 
     versionForPackageSet = set: set.python.version or null;
 
@@ -157,7 +172,7 @@ in {
 
   };
 
-  perl = packageSet {
+  perl = {
 
     versionForPackageSet = set: set.perl.version or null;
 
