@@ -7,7 +7,7 @@ let
   pregenPath = toString (<nixpkgs-meta> + "/package-sets.json");
   pregenResult =
     if builtins.pathExists pregenPath
-    then lib.importJSON pregenPath
+    then withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}") (lib.importJSON pregenPath)
     else lib.warn "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slow"
       (import ./package-sets.nix {
         inherit lib;
