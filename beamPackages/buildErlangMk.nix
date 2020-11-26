@@ -20,6 +20,9 @@ beamPackages.buildErlangMk ( args // rec {
   inherit (meta.getBuilderSource project args) version src pname src_json;
   name = pname;
 
+  # This for one sets meta.position to where the project is defined
+  pos = builtins.unsafeGetAttrPos "project" args;
+
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''

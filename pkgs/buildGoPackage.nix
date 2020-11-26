@@ -13,6 +13,9 @@
 buildGoPackage ( args // rec {
   inherit (meta.getBuilderSource project args) version autoversion src name src_json;
 
+  # This for one sets meta.position to where the project is defined
+  pos = builtins.unsafeGetAttrPos "project" args;
+
   # Go development in Nix at flox follows the convention of injecting the
   # version string at build time using ldflags. Nix will deduce the version for
   # you, or you can provide an override version in your nix expression. Requires

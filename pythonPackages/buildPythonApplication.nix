@@ -20,6 +20,10 @@ builtins.trace (
 # Actually create the derivation.
 pythonPackages.buildPythonApplication ( args // {
   inherit (meta.getBuilderSource project args) version src pname src_json;
+
+  # This for one sets meta.position to where the project is defined
+  pos = builtins.unsafeGetAttrPos "project" args;
+
   # Add tools for development environment only.
   nativeBuildInputs = nativeBuildInputs ++ [
     pythonPackages.ipython
