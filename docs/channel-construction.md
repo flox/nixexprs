@@ -71,10 +71,12 @@ The project/repository to get the source for
 
 ##### Argument `<overrides>` (attribute set)
 
-- `rev` (string, default `"master"`): A Git revision or branch to use for the source
-- `version` (string, default from GitHub): The version string to use for the source
-- `src` (string, default from GitHub): The path to the source, overrides the one from GitHub
+- `rev` (string, default `"master"`): A Git hash or branch to use for the source, only used if `src` is unset
+- `src` (string, default from GitHub): The path to the source, overrides the one from GitHu
+- `version` (string, default from GitHub if no `src` passed, otherwise required): The version string to use for the source
 - `pname` (string, default project name): The package name
+- `versionSuffix` (string, default `""`): Additional suffix to append to the resulting version. Should be increased over time
+- `extraInfo` (attribute set, default `{}`): Arbitrary additional info about the source, will be passed to the resulting `infoJson`
 
 ##### Returns
 An attribute set with attributes:
@@ -83,9 +85,8 @@ An attribute set with attributes:
 - `version` (version string): The package version, intended to be passed to nixpkgs builders
 - `name` (string): `pname + "-" + version`, intended to be passed to nixpkgs builders that don't support `pname` and `version` separately
 - `src` (path): The path to the resulting source
-- `origversion` (version string): The original version as specified by the GitHub source. This string can be ambiguous across versions.
-- `autoversion` (version string): The automatically generated version string, a combination of the `origversion` and the Git revision and therefore non-ambiguous
-- `src_json` (json string): A json string encoding the source used
+- `origversion` (version string): The original version as specified by the GitHub source or with `<overrides>`. This string may not uniquely identify a revision
+- `infoJson` (json string): A json string encoding the source used and all its properties
 
 #### `getBuilderSource <project> <overrides>`
 
