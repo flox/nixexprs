@@ -1,4 +1,4 @@
-{ nixpkgs, repo }: {
+{ jq, nixpkgs, repo }: {
   type = "build";
   exitCode = 0;
   nixPath = [
@@ -17,6 +17,6 @@
   ];
   postCommands = [
     "grep Hello <(result/bin/python -c 'import example; example.hello()')"
-    "grep rev1 result/.flox.json"
+    "${jq}/bin/jq . result/.flox.json"
   ];
 }

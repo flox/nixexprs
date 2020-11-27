@@ -3,13 +3,15 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ python, pythonPackages, meta }:
+{ python, pythonPackages, lib, meta }:
 
 # Arguments provided to flox.mkDerivation()
 { project	# the name of the project, required
 , nativeBuildInputs ? []
 , ... } @ args:
-
+let
+  source = meta.getBuilderSource project args;
+in
 builtins.trace (
   "flox.buildPythonApplication(project=\"" + project + "\", " +
   "python.version=\"" + python.version + "\", " +
@@ -19,7 +21,7 @@ builtins.trace (
 
 # Actually create the derivation.
 pythonPackages.buildPythonApplication ( args // {
-  inherit (meta.getBuilderSource project args) version src pname src_json;
+  inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
@@ -37,7 +39,7 @@ pythonPackages.buildPythonApplication ( args // {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo $src_json > $out/.flox.json
+    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
 
   # Namespace *.pth files are only processed for paths found within

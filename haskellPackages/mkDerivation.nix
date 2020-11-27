@@ -16,7 +16,7 @@ mkDerivation (removeAttrs args [ "project" ] // {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo ${lib.escapeShellArg source.src_json} > $out/.flox.json
+    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
 
   passthru = { inherit project; } // args.passthru or {};
