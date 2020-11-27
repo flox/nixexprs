@@ -3,23 +3,25 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ python, pythonPackages, meta }:
+{ python, pythonPackages, lib, meta }:
 
 # Arguments provided to flox.buildPythonPackage()
 { project		# the name of the project, required
 , nativeBuildInputs ? []
 , ... } @ args:
 
+let
+  source = meta.getBuilderSource project args;
+in
 builtins.trace (
   "flox.buildPythonPackage(project=\"" + project + "\", " +
   "python.version=\"" + python.version + "\", " +
   "with " + builtins.toString ( builtins.length (
     builtins.attrNames pythonPackages)) + " pythonPackages)"
 )
-
 # Actually create the derivation.
 pythonPackages.buildPythonPackage ( args // {
-  inherit (meta.getBuilderSource project args) version src pname src_json;
+  inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
@@ -54,6 +56,6 @@ pythonPackages.buildPythonPackage ( args // {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo $src_json > $out/.flox.json
+    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
 } )
