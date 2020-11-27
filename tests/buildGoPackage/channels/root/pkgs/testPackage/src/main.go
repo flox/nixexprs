@@ -5,5 +5,5 @@ import "fmt"
 var nixVersion string
 
 func main() {
-	fmt.Println("Hello world from" + nixVersion)
+	fmt.Println("Hello from version " + nixVersion)
 }
