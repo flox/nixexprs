@@ -1,1 +1,1 @@
-trace: warning: Path .*nixpkgs-meta/package-sets.json doesn't exist, won't be able to use precomputed result, evaluation will be slow
+trace: warning: Path .*nixpkgs-pregen/package-sets.json doesn't exist, won't be able to use precomputed result, evaluation will be slow

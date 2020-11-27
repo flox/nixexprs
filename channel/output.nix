@@ -4,7 +4,7 @@
 let
   inherit (pkgs) lib;
 
-  pregenPath = toString (<nixpkgs-meta> + "/package-sets.json");
+  pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
   pregenResult =
     if builtins.pathExists pregenPath
     then withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}") (lib.importJSON pregenPath)
