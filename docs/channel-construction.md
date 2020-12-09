@@ -36,7 +36,17 @@ The channel creation mechanism looks at a number of subdirectories of `topdir` t
 | Haskell | `haskellPackages` | `haskellPackages/<name>/default.nix` or `haskellPackages/<name>.nix` | `haskellPackages.<name>`, `haskell.packages.ghc865.<name>`, `haskell.packages.ghc882.<name>`, etc. |
 | Erlang | `beamPackages` | `beamPackages/<name>/default.nix` or `beamPackages/<name>.nix` | `beamPackages.<name>`, `beam.packages.erlangR18.<name>`, `beam.packages.erlangR19.<name>`, etc. |
 
-All of these subdirectories also support declaring packages as deep overriding by creating `*/<name>/deep-override`, which only works for the `*/<name>/default.nix` forms, not `*/<name>.nix`.
+### Shallow vs deep overriding
+
+Packages declared with these files override packages from nixpkgs for the current channel. By default this overriding is only applied shallowly however, meaning that it is only applied for immediate dependencies of your channel. The advantage of this is that mostly precompiled dependencies can be used, and is therefore cheaper to build.
+
+It's possible to make this overriding work deeply by creating an empty file `<set>/<name>/deep-override`. This signal to the evaluation that the package in `<set>/<name>/default.nix` should be overridden transitively for all dependencies, including nixpkgs and other channels. This is the easiest way to resolve version conflicts coming from multiple versions of the same package in the same dependency closure.
+
+| Type | Shallow | Deep |
+| --- | --- | --- |
+| To enable | (enabled by default) | Create `<set>/<name>/deep-override` |
+| Cheap to build | Yes | No |
+| Free of package conflicts | No | Yes |
 
 ## Call scope
 
