@@ -272,7 +272,7 @@ let
               spec.deepOverride superSet (createSet spec.name superSet spec.packageScope spec.funs.deep));
         in mergeSets (map deepOverlaySet deepOutputSpecs);
 
-
+      # See https://github.com/flox/nixexprs/blob/staging/docs/expl/deep-overrides.md#channel-dependencies for why this order seems to be reversed
     in lib.optional (deepOutputSpecs != []) deepOverlay ++ myArgs.extraOverlays ++ parentOverlays;
 
   # The resulting pkgs set of this channel, needed for the function arguments of

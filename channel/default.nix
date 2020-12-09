@@ -33,6 +33,9 @@ let
 
   # A list of { name; success | failure } entries, representing heuristics used
   # to determine the channel name, in the order of preference
+  #
+  # See https://github.com/flox/nixexprs/blob/staging/docs/expl/name-inference.md
+  # for an explanation of why this is done
   nameHeuristics =
     let
       f = name: value:
@@ -96,6 +99,9 @@ let
 
   # List of { name, path, value } entries of channels found in NIX_PATH
   # Searches through both prefixed and non-prefixed paths in NIX_PATH
+  #
+  # See https://github.com/flox/nixexprs/blob/staging/docs/expl/channel-discovery.md
+  # for an explanation of why channels are discovered through NIX_PATH
   channelNixexprsList =
     let
       expandEntry = e:
