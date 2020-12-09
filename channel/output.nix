@@ -303,11 +303,11 @@ let
     meta = {
       getSource = pkgs.callPackage ./getSource.nix {
         channel = myArgs.name;
-        channelSourceOverrides = sourceOverrides.${myArgs.name} or {};
+        inherit sourceOverrides;
       };
       getBuilderSource = pkgs.callPackage ./getSource.nix {
         channel = parentArgs.name;
-        channelSourceOverrides = sourceOverrides.${parentArgs.name} or {};
+        inherit sourceOverrides;
       };
       inherit withVerbosity;
     };

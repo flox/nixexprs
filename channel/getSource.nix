@@ -1,10 +1,14 @@
-{ channelSourceOverrides, channel, lib, fetchgit }:
+{ sourceOverrides, channel, lib, fetchgit }:
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
 # so that needs to take precedence over all other sources of src.
 project:
 overrides:
 let
+
+  channelSourceOverrides = sourceOverrides.${channel} or {};
+
+
   # The following three definitions are three different ways of getting the
   # source. Each of these defines an attribute set with all the info needed from
   # the source, including:
