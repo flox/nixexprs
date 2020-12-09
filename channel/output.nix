@@ -248,7 +248,9 @@ let
   channelOutputs =
     let
       original = lib.mapAttrs (name: args: outputFun myOverlays myArgs args) channelArgs;
-    in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
+      # Also allow each channel to be referenced by its all-lowercase name
+      lowercased = lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
+    in original // lowercased;
 
   # All the overlays that should be applied to the pkgs base set for this
   # channels evaluation (and all the channels it imports)
