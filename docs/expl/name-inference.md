@@ -30,4 +30,20 @@ In addition, channel inference handles different casings: GitHub usernames, and 
 
 The channel name is needed in order for other channels to depend on the latest version of the current channel.
 
+Imagine we have two channels `A` and `B`. A package from `A` depends on a package from `B`, which itself depends on another package from `A`. This is channel dependency cycle:
 
+```
+A------+
+^      v
++------B
+```
+
+Now assuming we are evaluating within channel `A`, but don't _know_ that this is channel `A`, then it can happen that we change a package in `A`, but that the change isn't propagated to `B`, since that just tries to get channel `A` from `NIX_PATH`, which notably can point to a different path than the path for `A` we're currently modifying.
+
+```
+unknown------+
+             v
+      A<-----B
+```
+
+By knowing that the channel we're evaluating is `A`, we can override the path for `A` on `NIX_PATH` with the one we're currently evaluating.
