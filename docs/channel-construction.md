@@ -1,6 +1,6 @@
 # Channel construction
 
-The entry point for channel construction is `<flox/channel>`, corresponding to [`flox/channel/default.nix`](../channel/default.nix). This function takes a set of arguments intended to be passed via a channels `default.nix` file. These are:
+Each channel needs to have a `default.nix` in its root that calls the `<flox/channel>` function to construct a channel, which allows the user to run `nix-build` to build outputs, Hydra to find all outputs, and other channels to use this channel as a dependency. The entrypoint of this function is in [`flox/channel/default.nix`](../channel/default.nix). It takes a set of arguments intended to be passed via a channels `default.nix` file. These are:
 
 - `name` (string, default inferred): The name of the channel. If not specified, the name is inferred from a number of heuristics.
 - `topdir` (path, required): The path to the channel root. Usually just `./.`, indicating that the channel lives in the same directory as the file importing `<flox/channel>`. This directory is used to determine all outputs of the channel. See below section for details.
@@ -26,7 +26,7 @@ The result of this function call are the channel outputs, as determined by mainl
 
 ## `topdir` subdirectories
 
-The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). Each subdirectory allows specifying a package set where each package has a <name> corresponding to the file it is defined in.
+The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). See [here](./package-sets.md) for more information on package sets. For each subdirectory, every file and directory within it specifies a package with the same name. E.g. `pythonPackages/myPkg/default.nix` defines the `myPkg` python package, accessible via the `pythonPackages.myPkg` attribute (among others). The following table specifies the properties of each supported subdirectory.
 
 | Package set | Call scope attribute | Paths | Output attribute paths |
 | --- | --- | --- | --- |
@@ -38,9 +38,14 @@ The channel creation mechanism looks at a number of subdirectories of `topdir` t
 
 ### Shallow vs deep overriding
 
-Packages declared with these files override packages from nixpkgs for the current channel. By default this overriding is only applied shallowly however, meaning that it is only applied for immediate dependencies of your channel. The advantage of this is that mostly precompiled dependencies can be used, and is therefore cheaper to build.
+Packages declared with these files override/replace packages from nixpkgs for the current channel. There's different ways in how packages are overridden:
 
-It's possible to make this overriding work deeply by creating an empty file `<set>/<name>/deep-override`. This signal to the evaluation that the package in `<set>/<name>/default.nix` should be overridden transitively for all dependencies, including nixpkgs and other channels. This is the easiest way to resolve version conflicts coming from multiple versions of the same package in the same dependency closure.
+- Shallow overriding: Only immediate dependencies of your channel are replaced, not transitive dependencies. This is the default.
+- Deep overriding: Replaces dependencies transitively in all dependencies, including other channels. This can be enabled by creating an empty file in `<set>/<name>/deep-override`
+
+Shallow overriding allows using mostly precompiled dependencies, while deep overriding could rebuild many layers of dependencies, so shallow overriding is cheaper to build. Deep overriding however resolves version conflicts caused by multiple versions of the same dependency in a closure.
+
+Check out [this document](expl/deep-overrides.md) to learn more about how deep overriding works under the hood.
 
 | Type | Shallow | Deep |
 | --- | --- | --- |
