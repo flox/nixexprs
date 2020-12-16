@@ -14,8 +14,8 @@ Note that since channel package definitions are always auto-called, it's not pos
 These requirements motivate the properties of the call scope:
 - `pkgs.*` and `pkgs.xorg.*` are added since this is the default scope available to packages in nixpkgs, allowing most top-level package definitions to be copy-pasted directly
 - A separate `channels` attribute is used for all channels, because channels can have arbitrary names. Other than nixpkgs potentially having a `channels` package, this ensures no name clashes. For convenience, `flox` is an alias to `channels.flox`.
-- The name of the package itself is set to the non-overridden version of it, in order to allow overrides of the previous version.
-- For package sets, the representative attribute name for that package set (such as `pythonPackages`, which is the same as the subdirectory name) is set to the correct version of the set. The same for `channels.<name>.pythonPackages`. This allows the expressions to be version-agnostic.
+- The name of the package itself is set to the non-overridden version of it, to allow overrides of the previous version.
+- For package sets, the representative attribute name for that package set (such as `pythonPackages`, which is the same as the subdirectory name) is defined to be the package set of the version we're currently evaluating. The same for `channels.<name>.pythonPackages`. This allows the expressions to be version-agnostic.
 - For package sets, all of the package sets attributes are also added to the scope, because the same is done for all package set scopes in nixpkgs itself. This ensures that package set package definitions can by copy-pasted in most cases.
 
 ## A considered alternative

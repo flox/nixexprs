@@ -1,6 +1,8 @@
 # Package sets
 
-Nixexprs channels support a number of subdirectories for specifying version-agnostic packages for certain package sets. Declaring such packages defines them for all supported package set versions at once. A version is only supported if nixpkgs supports it. In such version-agnostic package declarations, you need to make sure to use version-agnostic references to other packages in the same package set in order to avoid mixing versions.
+Package sets are collections of packages/libraries for a specific programming language. E.g. a python package set defines a set of python packages that can be used to build python applications. These packages are often specific to a certain version of the language, meaning there are different package sets for different versions.
+
+Nixexprs channels however support defining packages for version-agnostic package sets. Declaring such packages defines them for all supported package set versions at once. A version is only supported if nixpkgs supports it. In such version-agnostic package declarations, you need to make sure to use version-agnostic references to other packages in the same package set in order to avoid mixing versions.
 
 See [package-sets.nix](../channel/package-sets.nix) to see how package sets are defined to support this, or to see how more package sets can be added.
 
