@@ -9,6 +9,7 @@
 | [`flox.buildGoModule`](#floxbuildgomodule) | `pkgs/<name>/default.nix` | [`buildGoModule`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-modules) |
 | [`flox.buildGoPackage`](#floxbuildgopackage) | `pkgs/<name>/default.nix` | [`buildGoPackage`](https://nixos.org/manual/nixpkgs/stable/#ssec-go-legacy) |
 | [`flox.buildRustPackage`](#floxbuildrustpackage) | `pkgs/<name>/default.nix` | [`rustPlatform.buildRustPackage`](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) |
+| [`flox.naersk.buildRustPackage`](#floxnaerskbuildrustpackage) | `pkgs/<name>/default.nix` | N/A |
 | [`flox.haskellPackages.mkDerivation`](#floxhaskellpackagesmkderivation) | `haskellPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`haskellPackages.mkDerivation`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) |
 | [`flox.beamPackages.buildErlangMk`](#floxbeampackagesbuilderlangmk) | `beamPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`beamPackages.buildErlangMk`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/beam-modules/build-erlang-mk.nix) |
 
@@ -184,6 +185,30 @@ Creates a Rust application from an auto-updating reference to a repository.
 - All other arguments are also passed to nixpkgs `rustPlatform.buildRustPackage` function. Refer to [its documentation](https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo) for more information. One of the following arguments is needed for specifying the dependencies:
   - `cargoSha256` (string): The hash of all dependencies. Since this hash is not known beforehand, a fake hash like `lib.fakeSha256` must be used at first to get the correct hash with the first failing build.
   - `cargoVendorDir` (path): An alternative to `cargoSha256`, which can be used if dependencies are vendored with `cargo vendor`. Pass the path to the `vendor` directory with this option.
+
+#### Returns
+A derivation containing:
+- The binaries declared by the Rust package
+
+As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+
+#### Versions
+This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
+
+## `flox.naersk.buildRustPackage`
+
+[(source)](../pkgs/naersk/buildRustPackage.nix)
+
+Creates a Rust application from an auto-updating reference to a repository. Similar to [buildRustPackage](#floxbuildrustpackage) but built using the third-party [naersk](https://github.com/nmattia/naersk) tool.
+
+**For files:** `pkgs/<name>/default.nix`
+
+#### Inputs
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use as the source of this Rust application. This is passed as the `<project>` argument to `meta.getBuilderSource`.
+- All other arguments are passed as the `<overrides>` argument to `meta.getBuilderSource`. See [its documentation](channel-construction.md#getbuildersource-project-overrides) for how the source can be influenced with this.
+- All other arguments are also passed to naersk. Refer to [its documentation](https://github.com/nmattia/naersk#configuration) for more information.
+
+Notice the lack of a mandatory `cargoSha256`-like argument. This is because naersk extracts the hash from your Cargo.lock file.
 
 #### Returns
 A derivation containing:
