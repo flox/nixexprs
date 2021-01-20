@@ -10,8 +10,7 @@ let
     sha256 = "09b5g2krf8mfpajgz2bgapkv3dpimg0qx1nfpjafcrsk0fhxmqay";
   };
   naersk-lib = callPackage naersk { };
-in
-naersk-lib.buildPackage (args // {
+in naersk-lib.buildPackage (args // {
   inherit (source) pname version src;
 
   # This for one sets meta.position to where the project is defined

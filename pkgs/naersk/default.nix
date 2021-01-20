@@ -1,6 +1,3 @@
-{ callPackage, meta }:
-{
-  buildRustPackage = callPackage ./buildRustPackage.nix {
-    inherit meta;
-  };
+{ callPackage, meta }: {
+  buildRustPackage = callPackage ./buildRustPackage.nix { inherit meta; };
 }
