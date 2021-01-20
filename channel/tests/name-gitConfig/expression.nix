@@ -1,2 +1,1 @@
-{ dir }:
-import dir { debugVerbosity = 2; }
+{ dir }: import dir { debugVerbosity = 2; }

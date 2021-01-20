@@ -1,3 +1,1 @@
-{ meta }: {
-  result = meta.getSource "testDep" {};
-}
+{ meta }: { result = meta.getSource "testDep" { }; }

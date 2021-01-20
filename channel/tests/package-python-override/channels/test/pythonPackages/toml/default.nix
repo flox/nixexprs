@@ -1,3 +1,1 @@
-{ pythonPackages }: {
-  result = pythonPackages.toml.name;
-}
+{ pythonPackages }: { result = pythonPackages.toml.name; }

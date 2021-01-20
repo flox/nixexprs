@@ -1,5 +1,4 @@
-{ nixpkgs, repo }:
-{
+{ nixpkgs, repo }: {
   type = "instantiate";
   stringArgs.dir = "${./channels/test}";
   exitCode = 1;

@@ -1,1 +1,4 @@
-import <test> { name = "test"; debugVerbosity = 2; }
+import <test> {
+  name = "test";
+  debugVerbosity = 2;
+}

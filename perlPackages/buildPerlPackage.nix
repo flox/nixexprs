@@ -6,13 +6,12 @@
 { buildPerlPackage, lib, meta }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, ... } @ args:
+{ project # the name of the project, required
+, ... }@args:
 let
   source = meta.getBuilderSource project args;
-in
-# Actually create the derivation.
-buildPerlPackage ( args // {
+  # Actually create the derivation.
+in buildPerlPackage (args // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
@@ -24,4 +23,4 @@ buildPerlPackage ( args // {
     mkdir -p $out
     echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})

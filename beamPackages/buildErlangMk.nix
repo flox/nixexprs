@@ -6,16 +6,13 @@
 { lib, beam, erlangR18, meta, ... }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, erlang ? erlangR18
-, beamPackages ? beam.packages.erlangR18
-, nativeBuildInputs ? []
-, ... } @ args:
+{ project # the name of the project, required
+, erlang ? erlangR18, beamPackages ? beam.packages.erlangR18
+, nativeBuildInputs ? [ ], ... }@args:
 let
   source = meta.getBuilderSource project args;
-in
-# Actually create the derivation.
-beamPackages.buildErlangMk ( args // {
+  # Actually create the derivation.
+in beamPackages.buildErlangMk (args // {
   # build-erlang-mk.nix re-appends the version to the name,
   # so we need to not inherit name and instead pass what we
   # call "pname" as "name".
@@ -31,4 +28,4 @@ beamPackages.buildErlangMk ( args // {
     mkdir -p $out
     echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})

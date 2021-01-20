@@ -1,5 +1,4 @@
-{ nixpkgs, repo }: 
-{
+{ nixpkgs, repo }: {
   type = "eval-strict";
   exitCode = 0;
   nixPath = [

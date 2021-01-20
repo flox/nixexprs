@@ -1,12 +1,10 @@
 { mkDerivation, lib, meta }:
 
-{ project	# the name of the project, required
-, ... } @ args:
+{ project # the name of the project, required
+, ... }@args:
 
-let
-  source = meta.getBuilderSource project args;
-in
-mkDerivation (removeAttrs args [ "project" ] // {
+let source = meta.getBuilderSource project args;
+in mkDerivation (removeAttrs args [ "project" ] // {
   inherit (source) pname version src;
 
   # We can't set the position because mkDerivation doesn't pass on extra attributes to stdenv.mkDerivation
@@ -19,6 +17,6 @@ mkDerivation (removeAttrs args [ "project" ] // {
     echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
 
-  passthru = { inherit project; } // args.passthru or {};
+  passthru = { inherit project; } // args.passthru or { };
   license = args.license or null;
 })

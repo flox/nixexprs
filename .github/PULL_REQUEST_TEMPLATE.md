@@ -17,10 +17,14 @@ Check the spelling of your documentation with codespell:
 
     git ls-files | nix-shell -p findutils codespell --run "xargs codespell -q 2"
 
+Reformat your changes with nixfmt:
+
+    git ls-files | grep '.nix$' | nix-shell -p findutils nixfmt --run "xargs nixfmt"
+
 -->
 
-- [ ] I have created a test to cover the new behavior.    
+- [ ] I have created a test to cover the new behavior.
 - [ ] I have written and updated relevant documentation, including updating this
       pull request template if necessary. Note that we try to follow the
       [Divio documentation](https://documentation.divio.com/) of documentation.
-      
+

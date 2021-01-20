@@ -1,3 +1,1 @@
-{ channels }: {
-  result = channels.other.testBuilder.result;
-}
+{ channels }: { result = channels.other.testBuilder.result; }

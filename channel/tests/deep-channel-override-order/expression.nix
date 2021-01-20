@@ -1,1 +1,1 @@
-(import <test> {}).testPackage
+(import <test> { }).testPackage

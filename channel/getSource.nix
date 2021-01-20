@@ -2,12 +2,10 @@
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
 # so that needs to take precedence over all other sources of src.
-project:
-overrides:
+project: overrides:
 let
 
-  channelSourceOverrides = sourceOverrides.${channel} or {};
-
+  channelSourceOverrides = sourceOverrides.${channel} or { };
 
   # The following three definitions are three different ways of getting the
   # source. Each of these defines an attribute set with all the info needed from
@@ -18,85 +16,97 @@ let
   # - extraInfo: Any additional source attributes used for identifying it
 
   # The source is provided with `--argstr sourceOverrideJson`
-  channelOverrideComponents =
-    let
-      # This fetches all uncommitted changes, without untracked files
-      src = builtins.fetchGit channelSourceOverrides.${project};
-    in {
-      inherit src;
-      origversion = "manual";
-      # If the passed source isn't dirty (revCount != 0), we can use some additional info
-      versionSuffix = lib.optionalString (src.revCount != 0) "-git${toString src.shortRev}";
-      extraInfo = lib.optionalAttrs (src.revCount != 0) {
-        inherit (src) rev revCount;
-      };
-    };
+  channelOverrideComponents = let
+    # This fetches all uncommitted changes, without untracked files
+    src = builtins.fetchGit channelSourceOverrides.${project};
+  in {
+    inherit src;
+    origversion = "manual";
+    # If the passed source isn't dirty (revCount != 0), we can use some additional info
+    versionSuffix =
+      lib.optionalString (src.revCount != 0) "-git${toString src.shortRev}";
+    extraInfo =
+      lib.optionalAttrs (src.revCount != 0) { inherit (src) rev revCount; };
+  };
 
   # The source is provided via the `src` argument
   argumentOverrideComponents = {
     src = overrides.src;
     # We need to get a sensible version from somewhere
-    origversion = overrides.version or (throw
-      ("In ${let pos = builtins.unsafeGetAttrPos "src" overrides; in pos.file + ":" + toString pos.line}" +
-      " a source override was specified, which also requires a `version = ` to be assigned."));
+    origversion = overrides.version or (throw ("In ${
+        let pos = builtins.unsafeGetAttrPos "src" overrides;
+        in pos.file + ":" + toString pos.line
+      }"
+      + " a source override was specified, which also requires a `version = ` to be assigned."));
     versionSuffix = overrides.versionSuffix or "";
-    extraInfo = overrides.extraInfo or {};
+    extraInfo = overrides.extraInfo or { };
   };
 
-  metaComponents =
-    let
-      # The channel name is set to _unknown in channel/default.nix if it couldn't be inferred
-      # A warning for why it couldn't be inferred will already have been thrown
-      channelSources = if channel == "_unknown"
-        then throw "Could not find source for project \"${project}\" because the channel name is unknown."
-        else builtins.findFile builtins.nixPath "${channel}-meta/srcs";
+  metaComponents = let
+    # The channel name is set to _unknown in channel/default.nix if it couldn't be inferred
+    # A warning for why it couldn't be inferred will already have been thrown
+    channelSources = if channel == "_unknown" then
+      throw ''
+        Could not find source for project "${project}" because the channel name is unknown.''
+    else
+      builtins.findFile builtins.nixPath "${channel}-meta/srcs";
 
-      # toString the channelSources to ensure it's not a path, which could lead to importing it into the store
-      repoInfoPath = toString channelSources + "/${project}.json";
+    # toString the channelSources to ensure it's not a path, which could lead to importing it into the store
+    repoInfoPath = toString channelSources + "/${project}.json";
 
-      repoInfo = if builtins.pathExists repoInfoPath then lib.importJSON repoInfoPath
-        else throw ("Could not find source for project \"${project}\" in channel \"${channel}\". Are webhooks for"
-          + " that repository set up? If they are, make sure to commit at least once so the webhook triggers.");
+    repoInfo = if builtins.pathExists repoInfoPath then
+      lib.importJSON repoInfoPath
+    else
+      throw (''
+        Could not find source for project "${project}" in channel "${channel}". Are webhooks for''
+        + " that repository set up? If they are, make sure to commit at least once so the webhook triggers.");
 
-      rev = overrides.rev or "master";
+    rev = overrides.rev or "master";
 
-      # Choose the source for this derivation from the "srcs" hash found
-      # in the json data. If the user has provided the "rev" keyword then
-      # look for that revision either by explicit revision or branch name,
-      # and default to falling back to the revision referred to by the master
-      # branch.
-      gitHash =
-        # If the passed rev is a branch, use the git hash that branch points to
-        if repoInfo.branches ? ${rev} then repoInfo.branches.${rev}
+    # Choose the source for this derivation from the "srcs" hash found
+    # in the json data. If the user has provided the "rev" keyword then
+    # look for that revision either by explicit revision or branch name,
+    # and default to falling back to the revision referred to by the master
+    # branch.
+    gitHash =
+      # If the passed rev is a branch, use the git hash that branch points to
+      if repoInfo.branches ? ${rev} then
+        repoInfo.branches.${rev}
         # If the passed rev looks like a git hash already, use that directly
-        else if builtins.match "[0-9a-f]{40}" rev != null then rev
+      else if builtins.match "[0-9a-f]{40}" rev != null then
+        rev
         # Otherwise complain
-        else throw ("Could not find branch \"${rev}\" in ${repoInfoPath}, and could not find such a Git hash either."
+      else
+        throw (''
+          Could not find branch "${rev}" in ${repoInfoPath}, and could not find such a Git hash either.''
           # But also detect if the rev might be a shortened git hash
-          + lib.optionalString (builtins.match "[0-9a-f]{6,}" rev != null) " This looks like a shortened Git hash though, pass the full one instead");
+          + lib.optionalString (builtins.match "[0-9a-f]{6,}" rev != null)
+          " This looks like a shortened Git hash though, pass the full one instead");
 
-      # The attribute set for a specific git hash, originally generated by nix-prefetch-git, but amended with `version` and `revision` attributes
-      gitHashInfo = repoInfo.srcs.${gitHash} or (throw "Could not find git hash \"${gitHash}\" in ${repoInfoPath}");
+    # The attribute set for a specific git hash, originally generated by nix-prefetch-git, but amended with `version` and `revision` attributes
+    gitHashInfo = repoInfo.srcs.${gitHash} or (throw
+      ''Could not find git hash "${gitHash}" in ${repoInfoPath}'');
 
-    in {
-      # TODO: [Why not?] Use builtins.fetchGit
-      src = fetchgit {
-        inherit (gitHashInfo) url rev sha256;
-      };
-      # We assume that both .version and .revision exist in gitHashInfo
-      origversion = overrides.version or gitHashInfo.version;
-      versionSuffix = overrides.versionSuffix or "-r${toString gitHashInfo.revision}";
-      extraInfo = overrides.extraInfo or {} // {
-        inherit (gitHashInfo) url rev sha256 date;
-      };
+  in {
+    # TODO: [Why not?] Use builtins.fetchGit
+    src = fetchgit { inherit (gitHashInfo) url rev sha256; };
+    # We assume that both .version and .revision exist in gitHashInfo
+    origversion = overrides.version or gitHashInfo.version;
+    versionSuffix =
+      overrides.versionSuffix or "-r${toString gitHashInfo.revision}";
+    extraInfo = overrides.extraInfo or { } // {
+      inherit (gitHashInfo) url rev sha256 date;
     };
+  };
 
   # Determine which components to use by prioritizing `--argstr sourceOverrideJson`
   # over override arguments over `<$channel-meta/srcs>`
-  components =
-    if channelSourceOverrides ? ${project} then channelOverrideComponents
-    else if overrides ? src then argumentOverrideComponents
-    else metaComponents;
+  components = if channelSourceOverrides ? ${project} then
+    channelOverrideComponents
+  else if overrides ? src then
+    argumentOverrideComponents
+  else
+    metaComponents;
 
   # The resulting attributes
   result = rec {

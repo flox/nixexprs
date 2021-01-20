@@ -1,9 +1,7 @@
 { rustPlatform, lib, meta }:
 { project, ... }@args:
-let
-  source = meta.getBuilderSource project args;
-in
-rustPlatform.buildRustPackage (args // {
+let source = meta.getBuilderSource project args;
+in rustPlatform.buildRustPackage (args // {
   inherit (source) pname version src;
 
   # This for one sets meta.position to where the project is defined

@@ -1,1 +1,1 @@
-(import <a> {}).baz.result
+(import <a> { }).baz.result

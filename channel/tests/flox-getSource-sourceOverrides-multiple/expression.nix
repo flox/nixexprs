@@ -6,9 +6,9 @@ let
       other.testDep = toString otherRepo;
     };
   };
-  testContents = builtins.readFile (channel.testPackage.result.source.src + "/file");
-  otherContents = builtins.readFile (channel.testPackage.result.other.src + "/file");
-  result = {
-    inherit testContents otherContents;
-  };
+  testContents =
+    builtins.readFile (channel.testPackage.result.source.src + "/file");
+  otherContents =
+    builtins.readFile (channel.testPackage.result.other.src + "/file");
+  result = { inherit testContents otherContents; };
 in result

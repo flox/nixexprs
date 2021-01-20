@@ -5,13 +5,12 @@
 { stdenv, lib, meta }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, ... } @ args:
+{ project # the name of the project, required
+, ... }@args:
 let
   source = meta.getBuilderSource project args;
-in
-# Actually create the derivation.
-stdenv.mkDerivation ( args // {
+  # Actually create the derivation.
+in stdenv.mkDerivation (args // {
   inherit (source) version src name;
 
   # This for one sets meta.position to where the project is defined
@@ -23,4 +22,4 @@ stdenv.mkDerivation ( args // {
     mkdir -p $out
     echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})
