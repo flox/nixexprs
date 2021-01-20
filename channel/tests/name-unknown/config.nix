@@ -1,5 +1,4 @@
-{ nixpkgs, repo }:
-{
+{ nixpkgs, repo }: {
   type = "eval";
   stringArgs.dir = "${./channels/test}";
   exitCode = 0;

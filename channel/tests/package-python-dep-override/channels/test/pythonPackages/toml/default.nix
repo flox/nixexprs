@@ -1,3 +1,1 @@
-{ toml }: toml // {
-  result = "my-toml";
-}
+{ toml }: toml // { result = "my-toml"; }

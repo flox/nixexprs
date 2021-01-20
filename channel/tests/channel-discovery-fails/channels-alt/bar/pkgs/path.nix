@@ -1,1 +1,1 @@
-{}: { path = "channels-alt/bar"; }
+{ }: { path = "channels-alt/bar"; }

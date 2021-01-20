@@ -1,1 +1,1 @@
-(import <test> {}).haskellPackages.testPackage
+(import <test> { }).haskellPackages.testPackage

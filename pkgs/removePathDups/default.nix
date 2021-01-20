@@ -1,2 +1,1 @@
-{ makeSetupHook }:
-makeSetupHook {} ./removePathDups.sh
+{ makeSetupHook }: makeSetupHook { } ./removePathDups.sh

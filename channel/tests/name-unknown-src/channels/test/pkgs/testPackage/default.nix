@@ -1,1 +1,1 @@
-{ flox, meta }: meta.getSource "some-source" {}
+{ flox, meta }: meta.getSource "some-source" { }

@@ -1,1 +1,1 @@
-(import <test> {}).beamPackages.testPackage
+(import <test> { }).beamPackages.testPackage

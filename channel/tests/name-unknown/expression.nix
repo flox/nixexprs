@@ -1,2 +1,1 @@
-{ dir }:
-import dir {}
+{ dir }: import dir { }

@@ -6,31 +6,24 @@
 { python, pythonPackages, lib, meta }:
 
 # Arguments provided to flox.buildPythonPackage()
-{ project		# the name of the project, required
-, nativeBuildInputs ? []
-, ... } @ args:
+{ project # the name of the project, required
+, nativeBuildInputs ? [ ], ... }@args:
 
-let
-  source = meta.getBuilderSource project args;
-in
-builtins.trace (
-  "flox.buildPythonPackage(project=\"" + project + "\", " +
-  "python.version=\"" + python.version + "\", " +
-  "with " + builtins.toString ( builtins.length (
-    builtins.attrNames pythonPackages)) + " pythonPackages)"
-)
+let source = meta.getBuilderSource project args;
+in builtins.trace (''flox.buildPythonPackage(project="'' + project + ''", ''
+  + ''python.version="'' + python.version + ''", '' + "with "
+  + builtins.toString (builtins.length (builtins.attrNames pythonPackages))
+  + " pythonPackages)")
 # Actually create the derivation.
-pythonPackages.buildPythonPackage ( args // {
+pythonPackages.buildPythonPackage (args // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
 
   # Add tools for development environment only.
-  nativeBuildInputs = nativeBuildInputs ++ [
-    pythonPackages.ipython
-    pythonPackages.ipdb
-  ];
+  nativeBuildInputs = nativeBuildInputs
+    ++ [ pythonPackages.ipython pythonPackages.ipdb ];
 
   # Namespace *.pth files are only processed for paths found within
   # $NIX_PYTHONPATH, so ensure that this variable is defined for all
@@ -58,4 +51,4 @@ pythonPackages.buildPythonPackage ( args // {
     mkdir -p $out
     echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})

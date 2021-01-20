@@ -1,3 +1,1 @@
-import <nope> {
-  topdir = ./.;
-}
+import <nope> { topdir = ./.; }

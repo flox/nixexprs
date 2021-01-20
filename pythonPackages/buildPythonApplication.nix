@@ -6,35 +6,26 @@
 { python, pythonPackages, lib, meta }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, nativeBuildInputs ? []
-, ... } @ args:
-let
-  source = meta.getBuilderSource project args;
-in
-builtins.trace (
-  "flox.buildPythonApplication(project=\"" + project + "\", " +
-  "python.version=\"" + python.version + "\", " +
-  "with " + builtins.toString ( builtins.length (
-    builtins.attrNames pythonPackages)) + " pythonPackages)"
-)
+{ project # the name of the project, required
+, nativeBuildInputs ? [ ], ... }@args:
+let source = meta.getBuilderSource project args;
+in builtins.trace (''flox.buildPythonApplication(project="'' + project + ''", ''
+  + ''python.version="'' + python.version + ''", '' + "with "
+  + builtins.toString (builtins.length (builtins.attrNames pythonPackages))
+  + " pythonPackages)")
 
 # Actually create the derivation.
-pythonPackages.buildPythonApplication ( args // {
+pythonPackages.buildPythonApplication (args // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
 
   # Add tools for development environment only.
-  nativeBuildInputs = nativeBuildInputs ++ [
-    pythonPackages.ipython
-    pythonPackages.ipdb
-  ];
-  makeWrapperArgs = (args.makeWrapperArgs or []) ++ [
-    "--set" "NIX_SELF_PATH" "$out"
-    "--run 'export NIX_ORIG_ARGV0=\$0'"
-  ];
+  nativeBuildInputs = nativeBuildInputs
+    ++ [ pythonPackages.ipython pythonPackages.ipdb ];
+  makeWrapperArgs = (args.makeWrapperArgs or [ ])
+    ++ [ "--set" "NIX_SELF_PATH" "$out" "--run 'export NIX_ORIG_ARGV0=$0'" ];
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
@@ -92,4 +83,4 @@ pythonPackages.buildPythonApplication ( args // {
       done
     )
   '';
-} )
+})
