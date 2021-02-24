@@ -1,5 +1,2 @@
-let
-  channel = import <test> {};
-in {
-  black = channel.python3Packages.black.result;
-}
+let channel = import <test> { };
+in { black = channel.python3Packages.black.result; }

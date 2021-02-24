@@ -1,2 +1,1 @@
-{ dir }:
-(import dir {}).testPackage
+{ dir }: (import dir { }).testPackage

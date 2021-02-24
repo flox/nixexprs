@@ -1,3 +1,1 @@
-{ ncurses }: ncurses // {
-  result = "result";
-}
+{ ncurses }: ncurses // { result = "result"; }

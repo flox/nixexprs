@@ -3,10 +3,9 @@ let
   mockedGetSource = meta.getSource.override {
     fetchgit = args: builtins.trace "fetchgit called" args;
   };
-in
-{
+in {
   result = {
-    src = mockedGetSource "testPackage" {};
+    src = mockedGetSource "testPackage" { };
     result = testDep.result.src.result;
   };
 }

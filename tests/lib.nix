@@ -4,51 +4,43 @@ let
   repo = ../.;
 
   nixpkgs = fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/a52e974cff8fb80c427e0d55c01b3b8c770ccec4.tar.gz";
+    url =
+      "https://github.com/NixOS/nixpkgs/archive/a52e974cff8fb80c427e0d55c01b3b8c770ccec4.tar.gz";
     sha256 = "0yhcnn435j9wfi1idxr57c990aihg0n8605566f2l8vfdrz7hl7d";
   };
 
   pkgs = import nixpkgs {
-    config = {};
-    overlays = [];
+    config = { };
+    overlays = [ ];
   };
   inherit (pkgs) lib;
 
-  createNixPath = entries: lib.concatMapStringsSep ":" ({ prefix, path }:
-    if prefix == "" then path
-    else prefix + "=" + path
-  ) entries;
+  createNixPath = entries:
+    lib.concatMapStringsSep ":"
+    ({ prefix, path }: if prefix == "" then path else prefix + "=" + path)
+    entries;
 
-
-  /*
-  - type (build | eval | eval-strict | eval-json, required): Type
-  - exitCode (int, required): Expected exit code
-  - nixPath (list of { prefix, path }, default []): NIX_PATH entries
-  - file (path, default "${path}/expression.nix"): File to evaluate
-  - stringArgs (attrs of strings, default {}): Arguments to pass with --argstr
-  - stdoutMatchPath (path, default "${path}/stdout"): File that should match stdout
-  - stderrMatchPath (path, default "${path}/stderr"): File that should match stderr
+  /* - type (build | eval | eval-strict | eval-json, required): Type
+     - exitCode (int, required): Expected exit code
+     - nixPath (list of { prefix, path }, default []): NIX_PATH entries
+     - file (path, default "${path}/expression.nix"): File to evaluate
+     - stringArgs (attrs of strings, default {}): Arguments to pass with --argstr
+     - stdoutMatchPath (path, default "${path}/stdout"): File that should match stdout
+     - stderrMatchPath (path, default "${path}/stderr"): File that should match stderr
   */
   readConfig = path:
     let
       configValue = import (path + "/config.nix");
-      unchecked = if lib.isFunction configValue
-        then pkgs.callPackage configValue { inherit nixpkgs repo; }
-        else configValue;
-      checker =
-        { type
-        , exitCode
-        , nixPath ? []
-        , file ? path + "/expression.nix"
-        , stringArgs ? {}
-        , stdoutMatchPath ? path + "/stdout"
-        , stderrMatchPath ? path + "/stderr"
-        , nixOptions ? {}
-        , postCommands ? []
-        , overrideDerivation ? null
-        , override ? null
-        }: {
-          inherit type exitCode nixPath file stringArgs stdoutMatchPath stderrMatchPath nixOptions postCommands;
+      unchecked = if lib.isFunction configValue then
+        pkgs.callPackage configValue { inherit nixpkgs repo; }
+      else
+        configValue;
+      checker = { type, exitCode, nixPath ? [ ], file ? path + "/expression.nix"
+        , stringArgs ? { }, stdoutMatchPath ? path + "/stdout"
+        , stderrMatchPath ? path + "/stderr", nixOptions ? { }
+        , postCommands ? [ ], overrideDerivation ? null, override ? null }: {
+          inherit type exitCode nixPath file stringArgs stdoutMatchPath
+            stderrMatchPath nixOptions postCommands;
         };
     in checker unchecked;
 
@@ -64,30 +56,35 @@ let
 
       nixPath = "NIX_PATH=${lib.escapeShellArg (createNixPath config.nixPath)}";
 
-      args = lib.mapAttrsToList (name: value: "--argstr ${lib.escapeShellArg name} ${lib.escapeShellArg value}") config.stringArgs;
+      args = lib.mapAttrsToList (name: value:
+        "--argstr ${lib.escapeShellArg name} ${lib.escapeShellArg value}")
+        config.stringArgs;
 
-      options = lib.mapAttrsToList (name: value: "--option ${lib.escapeShellArg name} ${lib.escapeShellArg value}") config.nixOptions;
-    in "${nixPath} ${base} ${config.file} ${lib.concatStringsSep " " args} ${lib.concatStringsSep " " options}";
+      options = lib.mapAttrsToList (name: value:
+        "--option ${lib.escapeShellArg name} ${lib.escapeShellArg value}")
+        config.nixOptions;
+    in "${nixPath} ${base} ${config.file} ${lib.concatStringsSep " " args} ${
+      lib.concatStringsSep " " options
+    }";
 
-  /*
-  Returns a script that runs a test. Assumes a usable nix is in PATH
-  */
+  # Returns a script that runs a test. Assumes a usable nix is in PATH
   testScript = name: path:
     let
       config = readConfig path;
       command = configCommand config;
 
-      check = expected: file: lib.optionalString (builtins.pathExists expected) ''
-        while IFS="" read -r line || [[ -n $line ]]; do
-          if ! grep -xF -e "$line" ${file} >/dev/null && ! grep -x -e "$line" ${file} >/dev/null; then
-            echo -e '\033[0;31m'
-            echo "Expected ${file} to contain line"
-            echo "$line"
-            echo "But it doesn't"
-            fail
-          fi
-        done < ${expected}
-      '';
+      check = expected: file:
+        lib.optionalString (builtins.pathExists expected) ''
+          while IFS="" read -r line || [[ -n $line ]]; do
+            if ! grep -xF -e "$line" ${file} >/dev/null && ! grep -x -e "$line" ${file} >/dev/null; then
+              echo -e '\033[0;31m'
+              echo "Expected ${file} to contain line"
+              echo "$line"
+              echo "But it doesn't"
+              fail
+            fi
+          done < ${expected}
+        '';
 
     in pkgs.writeShellScript "test-${name}" ''
       set -euo pipefail
@@ -151,6 +148,5 @@ let
       exit 1
     fi
   '';
-
 
 in singleScript // { inherit testScripts; }

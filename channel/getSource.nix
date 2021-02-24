@@ -1,80 +1,123 @@
-{ channelSourceOverrides, channel, lib, fetchgit }:
+{ sourceOverrides, channel, lib, fetchgit }:
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
 # so that needs to take precedence over all other sources of src.
-project:
-override:
-  let
-    srcs =
-      if channel == "_unknown"
-      then throw "Could not find source for project \"${project}\" because the channel name is unknown."
-      else builtins.findFile builtins.nixPath "${channel}-meta/srcs";
+project: overrides:
+let
 
-    isOverridden = channelSourceOverrides ? ${project};
-    overriddenSource = builtins.fetchGit channelSourceOverrides.${project};
+  channelSourceOverrides = sourceOverrides.${channel} or { };
 
-    _srcs_json_ = srcs + "/${project}.json";
-    revdata = if builtins.pathExists _srcs_json_ then lib.importJSON _srcs_json_
-      else throw "Could not find source for project \"${project}\" in channel \"${channel}\". Are webhooks for that repository set up?";
-    _latest_ = revdata.latest;
-    _srcs_ = revdata.srcs;
+  # The following three definitions are three different ways of getting the
+  # source. Each of these defines an attribute set with all the info needed from
+  # the source, including:
+  # - src: The path to the source
+  # - origversion: The original version of the source
+  # - versionSuffix: An optional version suffix
+  # - extraInfo: Any additional source attributes used for identifying it
 
-    # XXX temporarily construct branches using _latest_ if the json
-    # data doesn't already have a branches hash.
-    # _branches_ = revdata.branches;
-    _branches_ = revdata.branches or { master = "${_latest_}"; };
+  # The source is provided with `--argstr sourceOverrideJson`
+  channelOverrideComponents = let
+    # This fetches all uncommitted changes, without untracked files
+    src = builtins.fetchGit channelSourceOverrides.${project};
+  in {
+    inherit src;
+    origversion = "manual";
+    # If the passed source isn't dirty (revCount != 0), we can use some additional info
+    versionSuffix =
+      lib.optionalString (src.revCount != 0) "-git${toString src.shortRev}";
+    extraInfo =
+      lib.optionalAttrs (src.revCount != 0) { inherit (src) rev revCount; };
+  };
+
+  # The source is provided via the `src` argument
+  argumentOverrideComponents = {
+    src = overrides.src;
+    # We need to get a sensible version from somewhere
+    origversion = overrides.version or (throw ("In ${
+        let pos = builtins.unsafeGetAttrPos "src" overrides;
+        in pos.file + ":" + toString pos.line
+      }"
+      + " a source override was specified, which also requires a `version = ` to be assigned."));
+    versionSuffix = overrides.versionSuffix or "";
+    extraInfo = overrides.extraInfo or { };
+  };
+
+  metaComponents = let
+    # The channel name is set to _unknown in channel/default.nix if it couldn't be inferred
+    # A warning for why it couldn't be inferred will already have been thrown
+    channelSources = if channel == "_unknown" then
+      throw ''
+        Could not find source for project "${project}" because the channel name is unknown.''
+    else
+      builtins.findFile builtins.nixPath "${channel}-meta/srcs";
+
+    # toString the channelSources to ensure it's not a path, which could lead to importing it into the store
+    repoInfoPath = toString channelSources + "/${project}.json";
+
+    repoInfo = if builtins.pathExists repoInfoPath then
+      lib.importJSON repoInfoPath
+    else
+      throw (''
+        Could not find source for project "${project}" in channel "${channel}". Are webhooks for''
+        + " that repository set up? If they are, make sure to commit at least once so the webhook triggers.");
+
+    rev = overrides.rev or "master";
 
     # Choose the source for this derivation from the "srcs" hash found
     # in the json data. If the user has provided the "rev" keyword then
     # look for that revision either by explicit revision or branch name,
     # and default to falling back to the revision referred to by the master
     # branch.
-    _src_rev_ = if builtins.hasAttr "rev" override then (
-      _branches_.${override.rev} or override.rev
-    ) else (
-      _branches_.master
-    );
-    _src_ = _srcs_.${_src_rev_} or (
-      throw "could not find \"${_src_rev_}\" revision in ${_srcs_json_}"
-    );
-
-    # Select the version from the src's json metadata, but also allow it
-    # to be overridden (by flox).
-    origversion = ( override.version or (
-      if builtins.hasAttr "version" _src_ then
-         _src_.version
+    gitHash =
+      # If the passed rev is a branch, use the git hash that branch points to
+      if repoInfo.branches ? ${rev} then
+        repoInfo.branches.${rev}
+        # If the passed rev looks like a git hash already, use that directly
+      else if builtins.match "[0-9a-f]{40}" rev != null then
+        rev
+        # Otherwise complain
       else
-        # Let "unknown" versions be *numeric* to prevent "nix-env --upgrade"
-        # from interpreting the version as part of the package name.
-        "0"
-    ) );
-    autoversion = if builtins.hasAttr "revision" _src_
-      then (origversion + "-r" + builtins.toString _src_.revision) else origversion;
-    autosrc = fetchgit {
-      url = _src_.url;
-      rev = _src_.rev;
-      sha256 = _src_.sha256;
+        throw (''
+          Could not find branch "${rev}" in ${repoInfoPath}, and could not find such a Git hash either.''
+          # But also detect if the rev might be a shortened git hash
+          + lib.optionalString (builtins.match "[0-9a-f]{6,}" rev != null)
+          " This looks like a shortened Git hash though, pass the full one instead");
+
+    # The attribute set for a specific git hash, originally generated by nix-prefetch-git, but amended with `version` and `revision` attributes
+    gitHashInfo = repoInfo.srcs.${gitHash} or (throw
+      ''Could not find git hash "${gitHash}" in ${repoInfoPath}'');
+
+  in {
+    # TODO: [Why not?] Use builtins.fetchGit
+    src = fetchgit { inherit (gitHashInfo) url rev sha256; };
+    # We assume that both .version and .revision exist in gitHashInfo
+    origversion = overrides.version or gitHashInfo.version;
+    versionSuffix =
+      overrides.versionSuffix or "-r${toString gitHashInfo.revision}";
+    extraInfo = overrides.extraInfo or { } // {
+      inherit (gitHashInfo) url rev sha256 date;
     };
+  };
 
-  in rec {
-    inherit project origversion autoversion;
-    _src = if isOverridden then overriddenSource else override.src or autosrc;
-    src = if isOverridden then overriddenSource else _src;
+  # Determine which components to use by prioritizing `--argstr sourceOverrideJson`
+  # over override arguments over `<$channel-meta/srcs>`
+  components = if channelSourceOverrides ? ${project} then
+    channelOverrideComponents
+  else if overrides ? src then
+    argumentOverrideComponents
+  else
+    metaComponents;
 
-    version = if isOverridden then "manual" else autoversion;
-    pname = (override.pname or project);
+  # The resulting attributes
+  result = rec {
+    inherit project;
+    inherit (components) src origversion;
+    pname = overrides.pname or project;
+    version = components.origversion + components.versionSuffix;
     name = pname + "-" + version;
-    src_json =
-      if isOverridden then
-        builtins.toJSON {
-          inherit project src version pname name;
-          system = builtins.currentSystem;
-        }
-      else
-        # Redact the "path" attribute from the latest source data - we don't
-        # need it, and it causes the source package to be included in the
-        # closure of runtime dependencies.
-        builtins.toJSON (
-          lib.attrsets.filterAttrs ( n: v: n != "path" ) _src_
-        );
-  }
+  };
+
+in result // {
+  # Return all known source information as a JSON string, for easy embedding into $out
+  infoJson = builtins.toJSON (result // components.extraInfo);
+}

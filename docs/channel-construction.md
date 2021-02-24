@@ -1,6 +1,6 @@
 # Channel construction
 
-The entry point for channel construction is `<flox/channel>`, corresponding to [`flox/channel/default.nix`](../channel/default.nix). This function takes a set of arguments intended to be passed via a channels `default.nix` file. These are:
+Each channel needs to have a `default.nix` in its root that calls the `<flox/channel>` function to construct a channel, which allows the user to run `nix-build` to build outputs, Hydra to find all outputs, and other channels to use this channel as a dependency. The entrypoint of this function is in [`flox/channel/default.nix`](../channel/default.nix). It takes a set of arguments intended to be passed via a channels `default.nix` file. These are:
 
 - `name` (string, default inferred): The name of the channel. If not specified, the name is inferred from a number of heuristics.
 - `topdir` (path, required): The path to the channel root. Usually just `./.`, indicating that the channel lives in the same directory as the file importing `<flox/channel>`. This directory is used to determine all outputs of the channel. See below section for details.
@@ -26,7 +26,7 @@ The result of this function call are the channel outputs, as determined by mainl
 
 ## `topdir` subdirectories
 
-The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). Each subdirectory allows specifying a package set where each package has a <name> corresponding to the file it is defined in.
+The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). See [here](./package-sets.md) for more information on package sets. For each subdirectory, every file and directory within it specifies a package with the same name. E.g. `pythonPackages/myPkg/default.nix` defines the `myPkg` python package, accessible via the `pythonPackages.myPkg` attribute (among others). The following table specifies the properties of each supported subdirectory.
 
 | Package set | Call scope attribute | Paths | Output attribute paths |
 | --- | --- | --- | --- |
@@ -36,7 +36,22 @@ The channel creation mechanism looks at a number of subdirectories of `topdir` t
 | Haskell | `haskellPackages` | `haskellPackages/<name>/default.nix` or `haskellPackages/<name>.nix` | `haskellPackages.<name>`, `haskell.packages.ghc865.<name>`, `haskell.packages.ghc882.<name>`, etc. |
 | Erlang | `beamPackages` | `beamPackages/<name>/default.nix` or `beamPackages/<name>.nix` | `beamPackages.<name>`, `beam.packages.erlangR18.<name>`, `beam.packages.erlangR19.<name>`, etc. |
 
-All of these subdirectories also support declaring packages as deep overriding by creating `*/<name>/deep-override`, which only works for the `*/<name>/default.nix` forms, not `*/<name>.nix`.
+### Shallow vs deep overriding
+
+Packages declared with these files override/replace packages from nixpkgs for the current channel. There's different ways in how packages are overridden:
+
+- Shallow overriding: Only immediate dependencies of your channel are replaced, not transitive dependencies. This is the default.
+- Deep overriding: Replaces dependencies transitively in all dependencies, including other channels. This can be enabled by creating an empty file in `<set>/<name>/deep-override`
+
+Shallow overriding allows using mostly precompiled dependencies, while deep overriding could rebuild many layers of dependencies, so shallow overriding is cheaper to build. Deep overriding however resolves version conflicts caused by multiple versions of the same dependency in a closure.
+
+Check out [this document](expl/deep-overrides.md) to learn more about how deep overriding works under the hood.
+
+| Type | Shallow | Deep |
+| --- | --- | --- |
+| To enable | (enabled by default) | Create `<set>/<name>/deep-override` |
+| Cheap to build | Yes | No |
+| Free of package conflicts | No | Yes |
 
 ## Call scope
 
@@ -71,10 +86,12 @@ The project/repository to get the source for
 
 ##### Argument `<overrides>` (attribute set)
 
-- `rev` (string, default `"master"`): A Git revision or branch to use for the source
-- `version` (string, default from GitHub): The version string to use for the source
-- `src` (string, default from GitHub): The path to the source, overrides the one from GitHub
+- `rev` (string, default `"master"`): A Git hash or branch to use for the source, only used if `src` is unset
+- `src` (string, default from GitHub): The path to the source, overrides the one from GitHu
+- `version` (string, default from GitHub if no `src` passed, otherwise required): The version string to use for the source
 - `pname` (string, default project name): The package name
+- `versionSuffix` (string, default `""`): Additional suffix to append to the resulting version. Should be increased over time
+- `extraInfo` (attribute set, default `{}`): Arbitrary additional info about the source, will be passed to the resulting `infoJson`
 
 ##### Returns
 An attribute set with attributes:
@@ -83,9 +100,8 @@ An attribute set with attributes:
 - `version` (version string): The package version, intended to be passed to nixpkgs builders
 - `name` (string): `pname + "-" + version`, intended to be passed to nixpkgs builders that don't support `pname` and `version` separately
 - `src` (path): The path to the resulting source
-- `origversion` (version string): The original version as specified by the GitHub source. This string can be ambiguous across versions.
-- `autoversion` (version string): The automatically generated version string, a combination of the `origversion` and the Git revision and therefore non-ambiguous
-- `src_json` (json string): A json string encoding the source used
+- `origversion` (version string): The original version as specified by the GitHub source or with `<overrides>`. This string may not uniquely identify a revision
+- `infoJson` (json string): A json string encoding the source used and all its properties
 
 #### `getBuilderSource <project> <overrides>`
 

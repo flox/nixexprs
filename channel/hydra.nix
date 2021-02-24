@@ -1,6 +1,4 @@
-{ floxChannelName
-, supportedSystems ? [ "x86_64-linux" "aarch64-linux" ]
-}:
+{ floxChannelName, supportedSystems ? [ "x86_64-linux" "aarch64-linux" ] }:
 let
   channelRoot = builtins.findFile builtins.nixPath floxChannelName;
   channel = import channelRoot;

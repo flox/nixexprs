@@ -1,1 +1,1 @@
-(import <test> {}).perlPackages.testPackage
+(import <test> { }).perlPackages.testPackage

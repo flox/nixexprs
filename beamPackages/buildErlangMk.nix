@@ -3,22 +3,21 @@
 # from metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ beam, erlangR18, meta, ... }:
+{ lib, beam, erlangR18, meta, ... }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, erlang ? erlangR18
-, beamPackages ? beam.packages.erlangR18
-, nativeBuildInputs ? []
-, ... } @ args:
-
-# Actually create the derivation.
-beamPackages.buildErlangMk ( args // rec {
+{ project # the name of the project, required
+, erlang ? erlangR18, beamPackages ? beam.packages.erlangR18
+, nativeBuildInputs ? [ ], ... }@args:
+let
+  source = meta.getBuilderSource project args;
+  # Actually create the derivation.
+in beamPackages.buildErlangMk (args // {
   # build-erlang-mk.nix re-appends the version to the name,
   # so we need to not inherit name and instead pass what we
   # call "pname" as "name".
-  inherit (meta.getBuilderSource project args) version src pname src_json;
-  name = pname;
+  inherit (source) version src pname;
+  name = source.pname;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
@@ -27,6 +26,6 @@ beamPackages.buildErlangMk ( args // rec {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo $src_json > $out/.flox.json
+    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})

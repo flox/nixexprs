@@ -8,7 +8,9 @@ runCommandNoCC "setup-dotfiles" {
       exit 1
     fi
 
-    if [[ "$(realpath "$binPath")" != ${placeholder "out"}/bin/setup-dotfiles ]]; then
+    if [[ "$(realpath "$binPath")" != ${
+      placeholder "out"
+    }/bin/setup-dotfiles ]]; then
       echo "The setup-dotfiles found on PATH isn't the one that's called" >&2
       exit 1
     fi

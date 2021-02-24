@@ -1,3 +1,1 @@
-{ hello }: hello.overrideAttrs (old: {
-  name = "my-${old.pname}";
-})
+{ hello }: hello.overrideAttrs (old: { name = "my-${old.pname}"; })

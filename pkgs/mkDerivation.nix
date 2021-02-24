@@ -2,15 +2,16 @@
 # magic required to locate source, version and build number from
 # metadata cached by the nixpkgs mechanism.
 
-{ stdenv, meta }:
+{ stdenv, lib, meta }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, ... } @ args:
-
-# Actually create the derivation.
-stdenv.mkDerivation ( args // {
-  inherit (meta.getBuilderSource project args) version src name src_json;
+{ project # the name of the project, required
+, ... }@args:
+let
+  source = meta.getBuilderSource project args;
+  # Actually create the derivation.
+in stdenv.mkDerivation (args // {
+  inherit (source) version src name;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
@@ -19,6 +20,6 @@ stdenv.mkDerivation ( args // {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo $src_json > $out/.flox.json
+    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})

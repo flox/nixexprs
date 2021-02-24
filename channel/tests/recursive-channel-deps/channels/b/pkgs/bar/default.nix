@@ -1,3 +1,1 @@
-{ channels }: {
-  result = channels.a.foo.result;
-}
+{ channels }: { result = channels.a.foo.result; }

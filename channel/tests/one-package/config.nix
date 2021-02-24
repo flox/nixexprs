@@ -1,5 +1,4 @@
-{ nixpkgs, repo }: 
-{
+{ nixpkgs, repo }: {
   type = "instantiate";
   exitCode = 0;
   nixPath = [

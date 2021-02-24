@@ -1,4 +1,4 @@
-{ nixpkgs, repo }: {
+{ jq, nixpkgs, repo }: {
   type = "build";
   exitCode = 0;
   nixPath = [
@@ -15,8 +15,5 @@
       path = ./channels;
     }
   ];
-  postCommands = [
-    "result/bin/hello"
-    "grep rev1 result/.flox.json"
-  ];
+  postCommands = [ "result/bin/hello" "${jq}/bin/jq . result/.flox.json" ];
 }

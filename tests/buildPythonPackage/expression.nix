@@ -1,1 +1,1 @@
-(import <root> {}).pythonShell
+(import <root> { }).pythonShell

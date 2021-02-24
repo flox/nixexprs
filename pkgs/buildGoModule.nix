@@ -3,15 +3,16 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ buildGoModule, meta, ... }:
+{ buildGoModule, lib, meta, ... }:
 
 # Arguments provided to flox.mkDerivation()
-{ project	# the name of the project, required
-, ... } @ args:
-
-# Actually create the derivation.
-buildGoModule ( args // rec {
-  inherit (meta.getBuilderSource project args) version autoversion src name src_json;
+{ project # the name of the project, required
+, ... }@args:
+let
+  source = meta.getBuilderSource project args;
+  # Actually create the derivation.
+in buildGoModule (args // rec {
+  inherit (source) version src name;
 
   # This for one sets meta.position to where the project is defined
   pos = builtins.unsafeGetAttrPos "project" args;
@@ -21,13 +22,12 @@ buildGoModule ( args // rec {
   # you, or you can provide an override version in your nix expression. Requires
   # "var nixVersion string" in your application.
 
-  buildFlagsArray = (args.buildFlagsArray or []) ++ [
-    "-ldflags=-X main.nixVersion=${autoversion}"
-  ];
+  buildFlagsArray = (args.buildFlagsArray or [ ])
+    ++ [ "-ldflags=-X main.nixVersion=${source.version}" ];
   # Create .flox.json file in root of package dir to record
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo $src_json > $out/.flox.json
+    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
   '';
-} )
+})

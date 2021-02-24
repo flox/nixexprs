@@ -1,1 +1,1 @@
-(import <test> {}).python3Packages.testPackage
+(import <test> { }).python3Packages.testPackage

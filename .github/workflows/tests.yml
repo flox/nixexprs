@@ -46,3 +46,15 @@ jobs:
       run: |
         # -q 2 to hide warnings about binary files
         git ls-files | xargs codespell -q 2
+
+  nixfmt:
+    name: nixfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: cachix/install-nix-action@v12
+    - name: Install codespell
+      run: nix-env -f channel:nixos-20.09 -iA nixfmt
+    - name: Running nixfmt
+      run: |
+        git ls-files | grep '.nix$' | xargs nixfmt -c

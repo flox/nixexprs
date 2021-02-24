@@ -1,11 +1,11 @@
 { pkgs, nixpkgs, repo }:
 let
-  testRepo = pkgs.runCommandNoCC "repo" {} ''
+  testRepo = pkgs.runCommandNoCC "repo" { } ''
     mkdir $out
     echo test > $out/file
     cp -r ${./repoDotGit} $out/.git
   '';
-  otherRepo = pkgs.runCommandNoCC "other-repo" {} ''
+  otherRepo = pkgs.runCommandNoCC "other-repo" { } ''
     mkdir $out
     echo other > $out/file
     cp -r ${./repoDotGit} $out/.git

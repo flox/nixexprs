@@ -1,1 +1,1 @@
-{}: { path = "channels/foo"; }
+{ }: { path = "channels/foo"; }

@@ -1,1 +1,1 @@
-(import <root> {}).testPackage
+(import <root> { }).testPackage
