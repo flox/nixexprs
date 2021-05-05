@@ -167,7 +167,7 @@ let
     recurse = true;
     deepOverride = a: b: b;
     path = [ ];
-    packageScope = super: pname: scope // { ${pname} = super.${pname}; };
+    packageScope = super: pname: scope // lib.optionalAttrs (super ? ${pname}) { ${pname} = super.${pname}; };
     funs = packageSetFuns "toplevel" "pkgs";
   };
 
@@ -215,7 +215,7 @@ let
             # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
             # A callPackage abstraction that allows specifying multiple attribute sets might be nice
             packageScope = super: pname:
-              scope // {
+              scope // lib.optionalAttrs (super ? ${pname}) {
                 ${pname} = super.${pname};
                 ${spec.callScopeAttr} = packageSetScope // {
                   ${pname} = super.${pname};
