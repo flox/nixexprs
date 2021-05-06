@@ -49,23 +49,23 @@ let
     result = { };
   } lines).result;
 
-  nixexprsRemotes = let
+  floxpkgsRemotes = let
     remotes = lib.attrValues (sections.remote or { });
 
-    parseNixexprsUrl = remote:
+    parseFloxpkgsUrl = remote:
       let
-        m = builtins.match ".*github.com[:/](.*)/nixexprs(\\.git)?"
+        m = builtins.match ".*github.com[:/](.*)/floxpkgs(\\.git)?"
           (remote.url or "");
       in if m == null then m else lib.elemAt m 0;
 
-  in lib.unique (lib.filter (m: m != null) (map parseNixexprsUrl remotes));
+  in lib.unique (lib.filter (m: m != null) (map parseFloxpkgsUrl remotes));
 
-  result = if lib.length nixexprsRemotes == 0 then {
-    failure = "No nixexprs remotes found in Git config";
-  } else if lib.length nixexprsRemotes == 1 then {
-    success = lib.elemAt nixexprsRemotes 0;
+  result = if lib.length floxpkgsRemotes == 0 then {
+    failure = "No floxpkgs remotes found in Git config";
+  } else if lib.length floxpkgsRemotes == 1 then {
+    success = lib.elemAt floxpkgsRemotes 0;
   } else {
-    failure = "Multiple nixexprs remotes found in Git config";
+    failure = "Multiple floxpkgs remotes found in Git config";
   };
 
 in if exists then
