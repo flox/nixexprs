@@ -3,11 +3,10 @@
 # from metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ lib, beam, erlangR18, meta, ... }:
+{ lib, beamPackages, meta, ... }:
 
 # Arguments provided to flox.mkDerivation()
 { project # the name of the project, required
-, erlang ? erlangR18, beamPackages ? beam.packages.erlangR18
 , nativeBuildInputs ? [ ], ... }@args:
 let
   source = meta.getBuilderSource project args;
