@@ -1,5 +1,5 @@
 trace: warning: Channel name could not be inferred because all heuristics failed:
-- chanArgs: No "name" defined in the nixexprs default.nix
+- chanArgs: No "name" defined in the floxpkgs default.nix
 - cmdArgs: No "name" passed with `--argstr name <channel name>`
 - nixPath: No entries in NIX_PATH match path /nix/store/.*-test
 - baseName: topdir is in /nix/store, basename is nonsensical

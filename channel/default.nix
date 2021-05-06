@@ -1,4 +1,4 @@
-# Arguments for the channel file in nixexprs
+# Arguments for the channel file in floxpkgs
 { name ? null, topdir, extraOverlays ? [ ] }@chanArgs:
 
 # Arguments for the command line
@@ -33,7 +33,7 @@ in let
   # A list of { name; success | failure } entries, representing heuristics used
   # to determine the channel name, in the order of preference
   #
-  # See https://github.com/flox/nixexprs/blob/staging/docs/expl/name-inference.md
+  # See https://github.com/flox/floxpkgs/blob/staging/docs/expl/name-inference.md
   # for an explanation of why this is done
   nameHeuristics = let
     f = name: value:
@@ -44,7 +44,7 @@ in let
             # This is case-insensitive because GitHub usernames are as well
             found =
               lib.findFirst (e: lib.toLower e.name == lib.toLower value.success)
-              null channelNixexprsList;
+              null channelFloxpkgsList;
           in if found != null then {
             success = found.name;
           } else {
@@ -60,7 +60,7 @@ in let
       chanArgs = if chanArgs ? name then {
         success = chanArgs.name;
       } else {
-        failure = ''No "name" defined in the nixexprs default.nix'';
+        failure = ''No "name" defined in the floxpkgs default.nix'';
       };
       cmdArgs = if args ? name then {
         success = args.name;
@@ -69,14 +69,14 @@ in let
       };
       baseName = if dirOf topdir == builtins.storeDir then {
         failure = "topdir is in /nix/store, basename is nonsensical";
-      } else if baseNameOf topdir != "nixexprs" then {
+      } else if baseNameOf topdir != "floxpkgs" then {
         success = baseNameOf topdir;
       } else {
-        failure = ''Directory name of topdir is just "nixexprs"'';
+        failure = ''Directory name of topdir is just "floxpkgs"'';
       };
       gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
       nixPath = let
-        matchingEntries = lib.filter (e: e.path == topdir) channelNixexprsList;
+        matchingEntries = lib.filter (e: e.path == topdir) channelFloxpkgsList;
         matchingNames = lib.unique (map (e: e.name) matchingEntries);
       in if lib.length matchingNames == 0 then {
         failure = "No entries in NIX_PATH match path ${topdir}";
@@ -119,9 +119,9 @@ in let
   # List of { name, path, value } entries of channels found in NIX_PATH
   # Searches through both prefixed and non-prefixed paths in NIX_PATH
   #
-  # See https://github.com/flox/nixexprs/blob/staging/docs/expl/channel-discovery.md
+  # See https://github.com/flox/floxpkgs/blob/staging/docs/expl/channel-discovery.md
   # for an explanation of why channels are discovered through NIX_PATH
-  channelNixexprsList = let
+  channelFloxpkgsList = let
     expandEntry = e:
       if e.prefix != "" then [{
         name = e.prefix;
@@ -161,7 +161,7 @@ in let
       toString (map (e: e.name) channelEntries)
     }") channelEntries;
 
-  channelNixexprs = lib.listToAttrs channelNixexprsList;
+  channelFloxpkgs = lib.listToAttrs channelFloxpkgsList;
 
   importChannelSrc = name: fun:
     fun {
@@ -169,7 +169,7 @@ in let
       _return = "channelArguments";
     };
 
-  channelArgs = lib.mapAttrs importChannelSrc channelNixexprs // {
+  channelArgs = lib.mapAttrs importChannelSrc channelFloxpkgs // {
     ${name} = myChannelArgs;
   };
 

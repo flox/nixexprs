@@ -1,6 +1,6 @@
 # How deep overrides work
 
-Flox channels have support for [defining packages as deep-overriding](../channel-construction.md#shallow-vs-deep-overriding). While the interface to this feature is really simple, [the implementation](https://github.com/flox/nixexprs/blob/staging/channel/output.nix) is very tricky.
+Flox channels have support for [defining packages as deep-overriding](../channel-construction.md#shallow-vs-deep-overriding). While the interface to this feature is really simple, [the implementation](https://github.com/flox/floxpkgs/blob/staging/channel/output.nix) is very tricky.
 
 The underlying mechanism that allows this feature to work are [nixpkgs overlays](https://nixos.org/manual/nixpkgs/stable/#sec-overlays-definition). Packages that specify themselves as deep-overriding are injected into nixpkgs with an overlay. For top-level packages in `pkgs/<name>` this is very easy with an overlay like
 

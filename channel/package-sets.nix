@@ -90,7 +90,7 @@ in lib.mapAttrs packageSet {
        The standard attribute that callPackage passes the package files as an argument for finding the package set
      - deepOverride :: PackageSet -> PackageSet
        Takes two package sets and deeply overrides the former to use all dependencies from the latter
-       See https://github.com/flox/nixexprs/blob/staging/docs/expl/deep-overrides.md#package-sets for why this is needed
+       See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#package-sets for why this is needed
   */
 
   haskell = {
