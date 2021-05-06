@@ -54,6 +54,8 @@ let
         eval-json = "nix-instantiate --eval --strict --json";
       }.${config.type} or (throw "No such type ${config.type}");
 
+      binary = "${lib.getBin pkgs.nix}/bin/${base}";
+
       nixPath = "NIX_PATH=${lib.escapeShellArg (createNixPath config.nixPath)}";
 
       args = lib.mapAttrsToList (name: value:
@@ -63,9 +65,8 @@ let
       options = lib.mapAttrsToList (name: value:
         "--option ${lib.escapeShellArg name} ${lib.escapeShellArg value}")
         config.nixOptions;
-    in "${nixPath} ${base} ${config.file} ${lib.concatStringsSep " " args} ${
-      lib.concatStringsSep " " options
-    }";
+      parts = [ nixPath binary config.file ] ++ args ++ options;
+    in lib.concatStringsSep " " parts;
 
   # Returns a script that runs a test. Assumes a usable nix is in PATH
   testScript = name: path:
