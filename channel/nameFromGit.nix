@@ -53,9 +53,7 @@ let
     remotes = lib.attrValues (sections.remote or { });
 
     parseFloxpkgsUrl = remote:
-      let
-        m = builtins.match ".*github.com[:/](.*)/floxpkgs(\\.git)?"
-          (remote.url or "");
+      let m = builtins.match ".*[:/](.*)/floxpkgs(\\.git)?" (remote.url or "");
       in if m == null then m else lib.elemAt m 0;
 
   in lib.unique (lib.filter (m: m != null) (map parseFloxpkgsUrl remotes));
