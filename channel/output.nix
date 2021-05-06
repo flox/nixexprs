@@ -158,6 +158,7 @@ let
   # TODO: What if you want to override e.g. pkgs.xorg.libX11. Make sure to recurse into attributes
   toplevel = let
     scope = baseScope // {
+      inherit meta;
       channels = channelOutputs;
       flox = channelOutputs.flox or (throw
         "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
@@ -202,7 +203,7 @@ let
           packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope;
 
           scope = baseScope // packageSetScope // {
-            inherit channels;
+            inherit channels meta;
             flox = channels.flox or (throw
               "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
           };
@@ -338,20 +339,20 @@ let
       outputSpecs
     }") (mergeSets (map outputSet outputSpecs));
 
-  # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
-  baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs // {
-    meta = {
-      getSource = pkgs.callPackage ./getSource.nix {
-        channel = myArgs.name;
-        inherit sourceOverrides;
-      };
-      getBuilderSource = pkgs.callPackage ./getSource.nix {
-        channel = parentArgs.name;
-        inherit sourceOverrides;
-      };
-      inherit withVerbosity;
+  meta = {
+    getSource = pkgs.callPackage ./getSource.nix {
+      channel = myArgs.name;
+      inherit sourceOverrides;
     };
+    getBuilderSource = pkgs.callPackage ./getSource.nix {
+      channel = parentArgs.name;
+      inherit sourceOverrides;
+    };
+    inherit withVerbosity;
   };
+
+  # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
+  baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
 
 in withVerbosity 3 (builtins.trace
   ("[channel ${myArgs.name}] Evaluating, being imported from ${parentArgs.name}"))
