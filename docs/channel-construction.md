@@ -63,6 +63,7 @@ All paths in `*/<name>/default.nix` and `*/<name>.nix` are auto-called with a sc
   - `channels.<channel>.<output>`: Output attribute `<output>` of channel `<channel>`
 - `flox`: A convenience alias to `channels.flox` for accessing the Flox channels outputs
 - `<name>`: The package in nixpkgs of the same name as the one defined. This allows package overriding without getting infinite recursion
+- `callPackage`: A function like `pkgs.callPackage` but with the very scope described here (except `<name>`). This allows autocalling further files.
 
 In addition, for all package sets in [above table](#subdirectories) that have a call scope attribute `<attr>`, the following version-agnostic attributes are in scope as well. See [package sets](package-sets.md) for more info.
 - `<attr>`: A version-agnostic package set consisting of:
