@@ -119,5 +119,6 @@ let
 
 in result // {
   # Return all known source information as a JSON string, for easy embedding into $out
-  infoJson = builtins.toJSON (result // components.extraInfo);
+  infoJson =
+    builtins.toJSON (removeAttrs result [ "src" ] // components.extraInfo);
 }
