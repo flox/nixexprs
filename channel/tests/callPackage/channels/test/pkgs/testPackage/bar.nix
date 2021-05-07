@@ -1,3 +1,1 @@
-{ testPackage }: {
-  result = "${testPackage.foo.result}-bar";
-}
+{ testPackage }: { result = "${testPackage.foo.result}-bar"; }

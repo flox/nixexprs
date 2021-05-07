@@ -1,4 +1,4 @@
 { callPackage }: {
-  foo = callPackage ./foo.nix {};
-  bar = callPackage ./bar.nix {};
+  foo = callPackage ./foo.nix { };
+  bar = callPackage ./bar.nix { };
 }
