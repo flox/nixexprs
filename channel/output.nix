@@ -91,22 +91,18 @@ let
     else
       throw error);
 
-  # Imports all directories and files in a subpath and returns a list of { name = <name>; value = <expression>; deep = <bool>; file = <path>; }
-  /* Imports all directories and Nix files of the given package directory subpath. Returns
-     {
-       # For attributes that have { deep = true; } in their package directory (doesn't work for files)
-       deep = {
-         <name> = <fun>;
-       };
-       # For attributes that don't have { deep = true; }
-       shallow = {
-         <name> = <fun>;
-       };
-     }
-  */
-  packageSetFuns = setName: subpath:
+  # Turns a directory into an attribute set.
+  # Files with a .nix suffix get turned into an attribute name without the
+  # suffix. Directories get turned into an attribute of their name directly.
+  # If there is both a .nix file and a directory with the same name, the file
+  # takes precedence. The context argument is a string shown in trace messages
+  # Each value in the resulting attribute sets has attributes
+  # - value: The Nix value of the file or of the default.nix file in the directory
+  # - deep: In case of directories, whether there is a deep-override file within it. For files always false
+  # - file: The path to the Nix file that was imported
+  # - type: The file type, either "regular" for files or "directory" for directories
+  dirToAttrs = context: dir:
     let
-      dir = myArgs.topdir + "/${subpath}";
       exists = builtins.pathExists dir;
 
       importPath = name: type:
@@ -116,6 +112,7 @@ let
             value = import (dir + "/${name}");
             deep = builtins.pathExists (dir + "/${name}/deep-override");
             file = dir + "/${name}/default.nix";
+            inherit type;
           };
 
           regular = if lib.hasSuffix ".nix" name then
@@ -123,6 +120,7 @@ let
               value = import (dir + "/${name}");
               deep = false;
               file = dir + "/${name}";
+              inherit type;
             }
           else
             null;
@@ -133,22 +131,49 @@ let
       entries = lib.filter (v: v != null)
         (lib.attrValues (lib.mapAttrs importPath (builtins.readDir dir)));
 
+      # Regular files should be preferred over directories, so that e.g.
+      # foo.nix can be used to declare a further import of the foo directory
+      entryAttrs =
+        lib.listToAttrs (lib.sort (a: b: a.value.type == "regular") entries);
+
       message = ''
-        [channel ${myArgs.name}] [packageSet ${setName}] Importing all Nix expressions from directory "${
+        [channel ${myArgs.name}] [${context}] Importing all Nix expressions from directory "${
           toString dir
         }"'' + withVerbosity 6
-        (_: ". Attributes: ${toString (map (e: e.name) entries)}") "";
+        (_: ". Attributes: ${toString (lib.attrNames entryAttrs)}") "";
 
-      checkedEntries = if exists then
-        withVerbosity 4 (builtins.trace message) entries
+      result = if exists then
+        withVerbosity 4 (builtins.trace message) entryAttrs
       else
         withVerbosity 5 (builtins.trace
-          "[channel ${myArgs.name}] [packageSet ${setName}] Not importing any Nix expressions because `${
+          "[channel ${myArgs.name}] [${context}] Not importing any Nix expressions because `${
             toString dir
-          }` does not exist") [ ];
+          }` does not exist") { };
+
+    in result;
+
+  /* Imports all directories and Nix files of the given package directory subpath. Returns
+      {
+        # For attributes that have { deep = true; } in their package directory (doesn't work for files)
+        deep = {
+          <name> = <value>;
+        };
+        # For attributes that don't have { deep = true; }
+        shallow = {
+          <name> = <value>;
+        };
+      }
+     See dirToAttrs for the fields of <value>
+  */
+  packageSetFuns = setName: subpath:
+    let
+      dir = myArgs.topdir + "/${subpath}";
+
+      entries = lib.mapAttrsToList lib.nameValuePair
+        (dirToAttrs "packageSet ${setName}" dir);
 
       parts = lib.mapAttrs (n: v: lib.listToAttrs v)
-        (lib.partition (e: e.value.deep) checkedEntries);
+        (lib.partition (e: e.value.deep) entries);
 
     in {
       deep = parts.right;
@@ -351,6 +376,9 @@ let
       inherit sourceOverrides;
     };
     inherit withVerbosity;
+    mapDirectory = callPackage: dir:
+      lib.mapAttrs (name: value: callPackage value.value { })
+      (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
   };
 
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix

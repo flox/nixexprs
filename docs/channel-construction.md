@@ -115,6 +115,8 @@ See [`getSource`](#getsource-project-overrides) for details on arguments and ret
 
 #### `withVerbosity <verbosity> <fun> <arg>`
 
+Applies `<fun>` to `<arg>` only if the configured `debugVerbosity` is equal or higher than `<verbosity>`. With `<fun>` doing tracing, this allows controlling the verbosity level of the traced value. Example: `withVerbosity 5 (builtins.trace "Some message") 1`
+
 ##### Argument `<verbosity>` (integer)
 
 The minimum verbosity level to trigger for. The verbosity levels are roughly meant for:
@@ -134,3 +136,27 @@ The argument to pass to `<fun>` if `debugVerbosity` is above or equal to the pas
 ##### Returns
 - If `debugVerbosity` is greater or equal than `<verbosity>`, returns `<arg>` applied to `<fun>`
 - Otherwise returns `<arg>`
+
+#### `mapDirectory <callPackage> <directory>`
+
+Imports all Nix files and subdirectories of `<directory>`, importing them and turning them into Nix values by calling `<callPackage>` on them. This allows declaring local ad-hoc package sets. For example, with `pkgs/myPackages.nix` containing
+
+```nix
+{ meta, callPackage }: meta.mapDirectory callPackage ../myPackages`
+```
+
+any files in `myPackages` get turned into an attribute nested under the `myPackages` output attribute.
+
+Note that unlike [built-in package](./package-sets.md) sets like `pythonPackages`, `perlPackages`, there's no special handling of scope and versions with `mapDirectory`. It's just a simple collection of nested attributes.
+
+##### Argument `<callPackage>` (function)
+
+The `callPackage` function to use for autocalling the imported files.
+
+##### Argument `<directory>` (path)
+
+The directory to import paths from.
+
+##### Returns
+
+An attribute set containing attributes for every `<directory>/<name>.nix` file and every `<directory>/<name>` subdirectory, the files are turned to values with `<callPackage>`.
