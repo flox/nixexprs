@@ -162,6 +162,7 @@ let
       channels = channelOutputs;
       flox = channelOutputs.flox or (throw
         "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
+      callPackage = lib.callPackageWith scope;
     };
   in {
     name = "toplevel";
@@ -206,6 +207,7 @@ let
             inherit channels meta;
             flox = channels.flox or (throw
               "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
+            callPackage = lib.callPackageWith scope;
           };
 
           output = path: {
