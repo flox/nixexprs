@@ -157,18 +157,24 @@ let
 
   # TODO: What if you want to override e.g. pkgs.xorg.libX11. Make sure to recurse into attributes
   toplevel = let
-    scope = baseScope // {
+    unoverridable = {
       inherit meta;
       channels = channelOutputs;
       flox = channelOutputs.flox or (throw
         "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
     };
+    scope = baseScope // unoverridable;
   in {
     name = "toplevel";
     recurse = true;
     deepOverride = a: b: b;
     path = [ ];
-    packageScope = super: pname: scope // { ${pname} = super.${pname}; };
+    packageScope = super: pname:
+      scope
+      # Only pass the super version if it doesn't override an unoverridable attribute!
+      // lib.optionalAttrs (!unoverridable ? ${pname}) {
+        ${pname} = super.${pname};
+      };
     funs = packageSetFuns "toplevel" "pkgs";
   };
 
@@ -202,11 +208,14 @@ let
 
           packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope;
 
-          scope = baseScope // packageSetScope // {
+          unoverridable = {
             inherit channels meta;
+            ${spec.callScopeAttr} = packageSetScope;
             flox = channels.flox or (throw
               "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
           };
+
+          scope = baseScope // packageSetScope // unoverridable;
 
           output = path: {
             name = setName;
@@ -216,7 +225,9 @@ let
             # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
             # A callPackage abstraction that allows specifying multiple attribute sets might be nice
             packageScope = super: pname:
-              scope // {
+              scope
+              # Only pass the super version if it doesn't override an unoverridable attribute!
+              // lib.optionalAttrs (!unoverridable ? ${pname}) {
                 ${pname} = super.${pname};
                 ${spec.callScopeAttr} = packageSetScope // {
                   ${pname} = super.${pname};
