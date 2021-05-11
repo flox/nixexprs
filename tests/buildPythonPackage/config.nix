@@ -17,6 +17,6 @@
   ];
   postCommands = [
     "grep Hello <(result/bin/python -c 'import example; example.hello()')"
-    "${jq}/bin/jq . result/.flox.json"
+    "${jq}/bin/jq -e -n --argjson contents \"$(cat result/.flox.json)\" '$contents | .pname'"
   ];
 }

@@ -30,7 +30,7 @@ pythonPackages.buildPythonApplication (args // {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
+    ${source.createInfoJson} > $out/.flox.json
   '';
 
   # Namespace *.pth files are only processed for paths found within
