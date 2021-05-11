@@ -101,7 +101,10 @@ An attribute set with attributes:
 - `name` (string): `pname + "-" + version`, intended to be passed to nixpkgs builders that don't support `pname` and `version` separately
 - `src` (path): The path to the resulting source
 - `origversion` (version string): The original version as specified by the GitHub source or with `<overrides>`. This string may not uniquely identify a revision
-- `infoJson` (json string): A json string encoding the source used and all its properties
+- `createInfoJson` (bash command): A bash command that outputs most of above properties as a JSON string, used by builders to generate `.flox.json`. Note that:
+  - `src` is not included
+  - `system` is an additional property, currently referring to the eval time system, such as `x86_64-linux`
+  - `buildDate` is a ISO8601 date string of the time that the derivation was built
 
 #### `getBuilderSource <project> <overrides>`
 

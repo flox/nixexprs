@@ -15,5 +15,8 @@
       path = ./channels;
     }
   ];
-  postCommands = [ "result/bin/hello" "${jq}/bin/jq . result/.flox.json" ];
+  postCommands = [
+    "result/bin/hello"
+    "${jq}/bin/jq -e -n --argjson contents \"$(cat result/.flox.json)\" '$contents | .pname'"
+  ];
 }

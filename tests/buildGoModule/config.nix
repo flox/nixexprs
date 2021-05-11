@@ -17,6 +17,6 @@
   ];
   postCommands = [
     "grep 'version 1.0' <(result/bin/hello)"
-    "${jq}/bin/jq . result/.flox.json"
+    "${jq}/bin/jq -e -n --argjson contents \"$(cat result/.flox.json)\" '$contents | .pname'"
   ];
 }

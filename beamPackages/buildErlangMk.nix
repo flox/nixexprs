@@ -25,6 +25,6 @@ in beamPackages.buildErlangMk (args // {
   # details of package inputs.
   postInstall = toString (args.postInstall or "") + ''
     mkdir -p $out
-    echo ${lib.escapeShellArg source.infoJson} > $out/.flox.json
+    ${source.createInfoJson} > $out/.flox.json
   '';
 })

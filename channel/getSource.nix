@@ -1,4 +1,4 @@
-{ sourceOverrides, channel, lib, fetchgit }:
+{ sourceOverrides, channel, lib, fetchgit, buildPackages }:
 # Set the src and version variables based on project.
 # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
 # so that needs to take precedence over all other sources of src.
@@ -117,8 +117,19 @@ let
     name = pname + "-" + version;
   };
 
-in result // {
-  # Return all known source information as a JSON string, for easy embedding into $out
-  infoJson =
-    builtins.toJSON (removeAttrs result [ "src" ] // components.extraInfo);
-}
+  infoJson = builtins.toJSON (removeAttrs result [ "src" ] // {
+    # TODO: This is the eval-time system, use the build-time system instead.
+    system = builtins.currentSystem;
+  } // components.extraInfo);
+
+  # Return all known source information on stdout with a command, for easy embedding into $out
+  createInfoJson = ''
+    (
+      ${lib.getBin buildPackages.jq}/bin/jq -n \
+      --arg buildDate "$(date -Iseconds)" \
+      --argjson info ${lib.escapeShellArg infoJson} \
+      '$info | .buildDate |= $buildDate'
+    )'';
+  # No newline at the end, because we want builders to be able to pass additional redirections!
+
+in result // { inherit infoJson createInfoJson; }
