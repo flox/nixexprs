@@ -176,7 +176,10 @@ let
     lib.mapAttrs (pname: value:
       withVerbosity 8 (builtins.trace
         "[channel ${myArgs.name}] [packageSet ${name}] Auto-calling package ${pname}")
-      (lib.callPackageWith (packageScope super pname) value.value { }));
+      (lib.callPackageWith (packageScope super pname) value.value { } // {
+        # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxFile`
+        _floxFile = value.file;
+      }));
 
   packageSetOutputs = setName: spec:
     let

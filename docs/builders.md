@@ -13,6 +13,12 @@
 | [`flox.haskellPackages.mkDerivation`](#floxhaskellpackagesmkderivation) | `haskellPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`haskellPackages.mkDerivation`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/generic-builder.nix) |
 | [`flox.beamPackages.buildErlangMk`](#floxbeampackagesbuilderlangmk) | `beamPackages/<name>/default.nix` or `pkgs/<name>/default.nix` | [`beamPackages.buildErlangMk`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/beam-modules/build-erlang-mk.nix) |
 
+## Common return attributes
+
+All builders return these attributes:
+- `project`: The `project` given in the input attributes, this corresponds to the GitHub repository the package is built from.
+- `_floxFile`: The Nix file this package was constructed from. This is useful for the `flox` tool to know how to edit the expression for a package.
+
 ## `flox.mkDerivation`
 
 [(source)](../pkgs/mkDerivation.nix)
@@ -34,7 +40,7 @@ Creates a package using nixpkgs standard environment builder. Use this for C/C++
 #### Returns
 A derivation containing whatever was installed with the standard phases.
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 ## `flox.pythonPackages.buildPythonPackage`
 
@@ -56,7 +62,7 @@ A derivation containing:
 - A Python package suitable for use as a dependency of other Python packages
 - All binaries or other outputs declared by the Python package, e.g. by `entry_points` in `setup.py`
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 Python packages declared with this function in `./pythonPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
@@ -78,7 +84,7 @@ See [`flox.pythonPackages.buildPythonPackage`](#floxpythonpackagesbuildpythonpac
 A derivation containing:
 - All binaries or other outputs declared by the Python package, e.g. by `entry_points` in `setup.py`
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 - `flox.pythonPackages.buildPythonApplication`: Uses the default Python version of nixpkgs (currently 2.x.x)
@@ -105,7 +111,7 @@ A derivation containing:
 - A Perl package suitable for use as a dependency of other Perl packages
 - All binaries or other outputs declared by the Perl package, e.g. by `install_script` in `Makefile.PL`
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 Perl packages declared with this function in `./perlPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
@@ -138,7 +144,7 @@ Creates a Go application from an auto-updating reference to a repository using G
 A derivation containing:
 - The binaries declared by the Go package
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 This function is only available for the default Go version of nixpkgs `buildGoModule` function, which is currently Go 1.15.x
@@ -166,7 +172,7 @@ Creates a Go application from an auto-updating reference to a repository. Can be
 A derivation containing:
 - The binaries declared by the Go package
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 This function is only available for the default Go version of nixpkgs `buildGoPackage` function, which is currently Go 1.15.x
@@ -190,7 +196,7 @@ Creates a Rust application from an auto-updating reference to a repository.
 A derivation containing:
 - The binaries declared by the Rust package
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
@@ -214,7 +220,7 @@ Notice the lack of a mandatory `cargoSha256`-like argument. This is because naer
 A derivation containing:
 - The binaries declared by the Rust package
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 This function is only available for the default Rust version of nixpkgs, which is currently Rust 1.46.x
@@ -239,7 +245,7 @@ A derivation containing:
 - A Haskell package suitable for use as a dependency of other Haskell packages
 - If `isExecutable = true`, all binaries specified by the Haskell package
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 Haskell packages declared with this function in `./haskellPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
@@ -269,7 +275,7 @@ A derivation containing:
 - An Erlang package suitable for use as a dependency of other Erlang packages
 - All binaries specified by the Erlang package
 
-As with all builders, the derivation also exports a `.project` attribute which is the `project` from the inputs, allowing flox to discover which project this derivation belongs to.
+It also returns the [common return attributes](#common-return-attributes).
 
 #### Versions
 Erlang packages declared with this function in `./beamPackages` are version-agnostic. See [package sets](package-sets.md) for more info on version-agnostic definitions. This means:
