@@ -1,3 +1,5 @@
 { meta }:
-let mockedGetSource = meta.getBuilderSource.override { fetchgit = args: args; };
+let
+  mockedGetSource = meta.getChannelSource.override { fetchgit = args: args; }
+    meta.importingChannel;
 in { result = mockedGetSource "testPackage" { }; }

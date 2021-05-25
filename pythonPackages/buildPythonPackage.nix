@@ -7,15 +7,15 @@
 
 # Arguments provided to flox.buildPythonPackage()
 { project # the name of the project, required
-, nativeBuildInputs ? [ ], ... }@args:
+, channel ? meta.importingChannel, nativeBuildInputs ? [ ], ... }@args:
 
-let source = meta.getBuilderSource project args;
+let source = meta.getChannelSource channel project args;
 in builtins.trace (''flox.buildPythonPackage(project="'' + project + ''", ''
   + ''python.version="'' + python.version + ''", '' + "with "
   + builtins.toString (builtins.length (builtins.attrNames pythonPackages))
   + " pythonPackages)")
 # Actually create the derivation.
-pythonPackages.buildPythonPackage (args // {
+pythonPackages.buildPythonPackage (removeAttrs args [ "channel" ] // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined

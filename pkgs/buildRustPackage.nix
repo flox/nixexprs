@@ -1,7 +1,7 @@
 { rustPlatform, lib, meta }:
-{ project, ... }@args:
-let source = meta.getBuilderSource project args;
-in rustPlatform.buildRustPackage (args // rec {
+{ project, channel ? meta.importingChannel, ... }@args:
+let source = meta.getChannelSource channel project args;
+in rustPlatform.buildRustPackage (removeAttrs args [ "channel" ] // rec {
   inherit (source) pname version src;
 
   # Ensure that the cargoDeps path and checksum don't change with
