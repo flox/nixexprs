@@ -1,0 +1,17 @@
+{
+  "branches": {
+    "master": "9bbea4f5ab35d6fb8fe70c14daba19e7f35ab44e"
+  },
+  "srcs": {
+    "9bbea4f5ab35d6fb8fe70c14daba19e7f35ab44e": {
+      "url": "https://github.com/vicgeralds/vitetris",
+      "rev": "9bbea4f5ab35d6fb8fe70c14daba19e7f35ab44e",
+      "date": "2020-12-26T12:11:21+01:00",
+      "path": "/nix/store/l69br99gp7652rapravl2mi4c0ml2sjj-vitetris",
+      "sha256": "1ah1c5g7abksif0n8v5rb7r4pn2az20c3mkp4ak13vgs23ddmds5",
+      "fetchSubmodules": false,
+      "version": "1.0",
+      "revision": 0
+    }
+  }
+}
