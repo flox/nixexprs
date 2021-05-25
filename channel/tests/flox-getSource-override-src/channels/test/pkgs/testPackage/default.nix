@@ -1,5 +1,7 @@
 { flox, meta }:
-let mockedGetSource = meta.getSource.override { fetchgit = args: args; };
+let
+  mockedGetSource =
+    meta.getChannelSource.override { fetchgit = args: args; } meta.ownChannel;
 in {
   result = mockedGetSource "testPackage" {
     src = "/some/src/path";

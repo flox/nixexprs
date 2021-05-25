@@ -380,15 +380,16 @@ let
       outputSpecs
     }") (mergeSets (map outputSet outputSpecs));
 
-  meta = {
-    getSource = pkgs.callPackage ./getSource.nix {
-      channel = myArgs.name;
-      inherit sourceOverrides;
-    };
-    getBuilderSource = pkgs.callPackage ./getSource.nix {
-      channel = parentArgs.name;
-      inherit sourceOverrides;
-    };
+  meta = rec {
+    getChannelSource =
+      pkgs.callPackage ./getSource.nix { inherit sourceOverrides; };
+    getSource = getChannelSource ownChannel;
+    getBuilderSource = lib.warn
+      ("meta.getBuilderSource as used by channel ${myArgs.name} is deprecated,"
+        + " use `meta.getChannelSource meta.importingChannel` instead")
+      (getChannelSource importingChannel);
+    ownChannel = myArgs.name;
+    importingChannel = parentArgs.name;
     inherit withVerbosity;
     mapDirectory = callPackage: dir:
       lib.mapAttrs (name: value: callPackage value.value { })

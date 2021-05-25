@@ -7,11 +7,11 @@
 
 # Arguments provided to flox.mkDerivation()
 { project # the name of the project, required
-, ... }@args:
+, channel ? meta.importingChannel, ... }@args:
 let
-  source = meta.getBuilderSource project args;
+  source = meta.getChannelSource channel project args;
   # Actually create the derivation.
-in buildPerlPackage (args // {
+in buildPerlPackage (removeAttrs args [ "channel" ] // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined

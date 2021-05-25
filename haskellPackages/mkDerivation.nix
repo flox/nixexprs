@@ -1,10 +1,10 @@
 { mkDerivation, lib, meta }:
 
 { project # the name of the project, required
-, ... }@args:
+, channel ? meta.importingChannel, ... }@args:
 
-let source = meta.getBuilderSource project args;
-in mkDerivation (removeAttrs args [ "project" ] // {
+let source = meta.getChannelSource channel project args;
+in mkDerivation (removeAttrs args [ "project" "channel" ] // {
   inherit (source) pname version src;
 
   # We can't set the position because mkDerivation doesn't pass on extra attributes to stdenv.mkDerivation

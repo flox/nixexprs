@@ -1,20 +1,12 @@
-{ sourceOverrides, channel, lib, fetchgit, buildPackages }:
-# Set the src and version variables based on project.
-# Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
-# so that needs to take precedence over all other sources of src.
-project: overrides:
+{ sourceOverrides, lib, fetchgit, buildPackages }:
+channel:
 let
-
   channelSourceOverrides = sourceOverrides.${channel} or { };
-
-  # The following three definitions are three different ways of getting the
-  # source. Each of these defines an attribute set with all the info needed from
-  # the source, including:
-  # - src: The path to the source
-  # - origversion: The original version of the source
-  # - versionSuffix: An optional version suffix
-  # - extraInfo: Any additional source attributes used for identifying it
-
+  # Set the src and version variables based on project.
+  # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
+  # so that needs to take precedence over all other sources of src.
+in project:
+let
   # The source is provided with `--argstr sourceOverrideJson`
   channelOverrideComponents = let
     # This fetches all uncommitted changes, without untracked files
@@ -28,6 +20,16 @@ let
     extraInfo =
       lib.optionalAttrs (src.revCount != 0) { inherit (src) rev revCount; };
   };
+in overrides:
+let
+
+  # The following three definitions are three different ways of getting the
+  # source. Each of these defines an attribute set with all the info needed from
+  # the source, including:
+  # - src: The path to the source
+  # - origversion: The original version of the source
+  # - versionSuffix: An optional version suffix
+  # - extraInfo: Any additional source attributes used for identifying it
 
   # The source is provided via the `src` argument
   argumentOverrideComponents = {

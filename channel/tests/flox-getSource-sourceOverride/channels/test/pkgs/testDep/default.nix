@@ -1,5 +1,6 @@
 { flox, meta }:
 let
   mockedGetSource =
-    meta.getSource.override { fetchgit = args: { result = "result"; }; };
+    meta.getChannelSource.override { fetchgit = args: { result = "result"; }; }
+    meta.ownChannel;
 in { result = mockedGetSource "testDep" { }; }

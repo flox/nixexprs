@@ -7,11 +7,11 @@
 
 # Arguments provided to flox.mkDerivation()
 { project # the name of the project, required
-, nativeBuildInputs ? [ ], ... }@args:
+, channel ? meta.importingChannel, nativeBuildInputs ? [ ], ... }@args:
 let
-  source = meta.getBuilderSource project args;
+  source = meta.getChannelSource channel project args;
   # Actually create the derivation.
-in beamPackages.buildErlangMk (args // {
+in beamPackages.buildErlangMk (removeAttrs args [ "channel" ] // {
   # build-erlang-mk.nix re-appends the version to the name,
   # so we need to not inherit name and instead pass what we
   # call "pname" as "name".

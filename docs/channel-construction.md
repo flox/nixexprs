@@ -77,13 +77,17 @@ In addition, for all package sets in [above table](#subdirectories) that have a 
 
 ### Meta set
 
-#### `getSource <project> <overrides>`
+#### `getChannelSource <channel> <project> <overrides>`
 
-Gets an auto-updating reference to GitHub repository `<project>` of the current channel, allowing certain overrides of behavior with the `<overrides>` argument.
+Gets an auto-updating reference to GitHub repository `<project>` of the channel `<channel>` (aka the GitHub owner/organization), allowing certain overrides of behavior with the `<overrides>` argument.
+
+##### Argument `<channel>` (string)
+
+The channel/owner to get the source for.
 
 ##### Argument `<project>` (string)
 
-The project/repository to get the source for
+The project/repository to get the source for.
 
 ##### Argument `<overrides>` (attribute set)
 
@@ -107,11 +111,17 @@ An attribute set with attributes:
   - `system` is an additional property, currently referring to the eval time system, such as `x86_64-linux`
   - `buildDate` is a ISO8601 date string of the time that the derivation was built
 
-#### `getBuilderSource <project> <overrides>`
+#### `ownChannel`
 
-Gets an auto-updating reference to GitHub repository `<project>` of the _importing_ channel, allowing certain overrides of behavior with the `<overrides>` argument. Since this gets sources from the channel that imports this one, it is useful for declaring custom builders.
+The name of the own channel. May be `_unknown` in case the channel name couldn't be determined, see [channel name inference](./expl/name-inference.md).
 
-See [`getSource`](#getsource-project-overrides) for details on arguments and return value.
+#### `importingChannel`
+
+The channel from which this channel is accessed. In case this channel is accessed from itself, this is the same as [`ownChannel`](#ownChannel).
+
+#### `getSource <project> <overrides>`
+
+Like [`getChannelSource`](#getChannelSource-channel-project-overrides), but with [`ownChannel`](#ownChannel) passed as the `<channel>` argument.
 
 #### `withVerbosity <verbosity> <fun> <arg>`
 
