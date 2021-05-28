@@ -17,7 +17,7 @@
 
 All builders return these attributes:
 - `project`: The `project` given in the input attributes, this corresponds to the GitHub repository the package is built from.
-- `_floxFile`: The Nix file this package was constructed from. This is useful for the `flox` tool to know how to edit the expression for a package.
+- `_floxPath`: The path this package was constructed from. Either a Nix file directly, or a directory containing a `default.nix` file. This is useful for the `flox` tool to know how to edit the expression for a package.
 
 ## `flox.mkDerivation`
 
