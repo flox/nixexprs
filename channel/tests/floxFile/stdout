@@ -1,1 +1,0 @@
-{ dir = ".*/pkgs/dir/default.nix"; file = ".*/pkgs/file.nix"; pythonDir = ".*/pythonPackages/dir/default.nix"; pythonFile = ".*/pythonPackages/file.nix"; }

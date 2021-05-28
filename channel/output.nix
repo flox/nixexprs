@@ -106,21 +106,20 @@ let
       exists = builtins.pathExists dir;
 
       importPath = name: type:
-        {
+        let path = dir + "/${name}";
+        in {
           directory = lib.nameValuePair name {
             # TODO: Better error when there's no default.nix?
-            value = import (dir + "/${name}");
-            deep = builtins.pathExists (dir + "/${name}/deep-override");
-            file = dir + "/${name}/default.nix";
-            inherit type;
+            value = import path;
+            deep = builtins.pathExists (path + "/deep-override");
+            inherit path type;
           };
 
           regular = if lib.hasSuffix ".nix" name then
             lib.nameValuePair (lib.removeSuffix ".nix" name) {
-              value = import (dir + "/${name}");
+              value = import path;
               deep = false;
-              file = dir + "/${name}";
-              inherit type;
+              inherit path type;
             }
           else
             null;
@@ -209,8 +208,8 @@ let
       withVerbosity 8 (builtins.trace
         "[channel ${myArgs.name}] [packageSet ${name}] Auto-calling package ${pname}")
       (lib.callPackageWith (packageScope super pname) value.value { } // {
-        # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxFile`
-        _floxFile = value.file;
+        # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
+        _floxPath = value.path;
       }));
 
   packageSetOutputs = setName: spec:
