@@ -207,10 +207,12 @@ let
     lib.mapAttrs (pname: value:
       withVerbosity 8 (builtins.trace
         "[channel ${myArgs.name}] [packageSet ${name}] Auto-calling package ${pname}")
-      (lib.callPackageWith (packageScope super pname) value.value { } // {
+      ({
         # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
+        # Note that we let the callPackage result override this because builders
+        # like flox.importNix are able to provide a more accurate file location
         _floxPath = value.path;
-      }));
+      } // lib.callPackageWith (packageScope super pname) value.value { }));
 
   packageSetOutputs = setName: spec:
     let
