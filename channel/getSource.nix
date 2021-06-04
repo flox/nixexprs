@@ -90,8 +90,14 @@ let
       ''Could not find git hash "${gitHash}" in ${repoInfoPath}'');
 
   in {
-    # TODO: [Why not?] Use builtins.fetchGit
-    src = fetchgit { inherit (gitHashInfo) url rev sha256; };
+    src = fetchgit {
+      # To make sure the path matches (so we can reuse the cached version),
+      # extract the very same store path name.
+      # 44 is the length of "/nix/store/" plus the 32-char hash plus a "-"
+      name = builtins.substring 44 (-1) gitHashInfo.path;
+      inherit (gitHashInfo) url rev sha256;
+    };
+
     # We assume that both .version and .revision exist in gitHashInfo
     origversion = overrides.version or gitHashInfo.version;
     versionSuffix =
