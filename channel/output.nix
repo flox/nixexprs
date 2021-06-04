@@ -67,9 +67,9 @@ let
       lDrv = lib.isDerivation l;
       rDrv = lib.isDerivation r;
       prettyPath = lib.concatStringsSep "." path;
-      error = "Trying to override ${
+      warning = "Overriding ${
           lib.optionalString (!lDrv) "non-"
-        }derivation in nixpkgs"
+        }derivation ${lib.concatStringsSep "." path} in nixpkgs"
         + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
     in if lDrv == rDrv then
     # If both sides are derivations, override completely
@@ -89,7 +89,7 @@ let
             builtins.typeOf l
           } and right is ${builtins.typeOf r}") true
     else
-      throw error);
+      lib.warn warning true);
 
   # Turns a directory into an attribute set.
   # Files with a .nix suffix get turned into an attribute name without the
@@ -180,39 +180,16 @@ let
     };
 
   # TODO: What if you want to override e.g. pkgs.xorg.libX11. Make sure to recurse into attributes
-  toplevel = let
-    unoverridable = {
-      inherit meta;
-      channels = channelOutputs;
-      flox = channelOutputs.flox or (throw
-        "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
-      callPackage = lib.callPackageWith scope;
-    };
-    scope = baseScope // unoverridable;
-  in {
+  toplevel = {
     name = "toplevel";
     recurse = true;
     deepOverride = a: b: b;
     path = [ ];
-    packageScope = super: pname:
-      scope
-      # Only pass the super version if it doesn't override an unoverridable attribute!
-      // lib.optionalAttrs (!unoverridable ? ${pname}) {
-        ${pname} = super.${pname};
-      };
+    extraScope = {};
+    channels = channelOutputs;
     funs = packageSetFuns "toplevel" "pkgs";
   };
 
-  createSet = name: super: packageScope:
-    lib.mapAttrs (pname: value:
-      withVerbosity 8 (builtins.trace
-        "[channel ${myArgs.name}] [packageSet ${name}] Auto-calling package ${pname}")
-      ({
-        # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
-        # Note that we let the callPackage result override this because builders
-        # like flox.importNix are able to provide a more accurate file location
-        _floxPath = value.path;
-      } // lib.callPackageWith (packageScope super pname) value.value { }));
 
   packageSetOutputs = setName: spec:
     let
@@ -236,35 +213,17 @@ let
                 }`";
             }) channelOutputs;
 
-          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope;
-
-          unoverridable = {
-            inherit channels meta;
+          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope // {
             ${spec.callScopeAttr} = packageSetScope;
-            flox = channels.flox or (throw
-              "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
-            callPackage = lib.callPackageWith scope;
           };
-
-          scope = baseScope // packageSetScope // unoverridable;
 
           output = path: {
             name = setName;
             inherit path;
             recurse = paths.recurse;
             deepOverride = spec.deepOverride;
-            # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
-            # A callPackage abstraction that allows specifying multiple attribute sets might be nice
-            packageScope = super: pname:
-              scope
-              # Only pass the super version if it doesn't override an unoverridable attribute!
-              // lib.optionalAttrs (!unoverridable ? ${pname}) {
-                ${pname} = super.${pname};
-                ${spec.callScopeAttr} = packageSetScope // {
-                  ${pname} = super.${pname};
-                };
-              };
-            inherit funs;
+            extraScope = packageSetScope;
+            inherit channels funs;
           };
 
           aliasOutput = path: {
@@ -285,7 +244,8 @@ let
        name = <name for this output set>;
        path = <attribute path where this set should end up in the channels result>;
        recurse = <bool whether it should be recursed into by hydra>;
-       packageScope = <super: pname: The scope to call a specific package pname with>;
+       extraScope = <attribute set of additional scope to provide to auto-called packages>;
+       channels = <channel attribute set to provide in the scope>;
        deepOverride = <set: overrides: How to deeply override this output with nixpkgs overlays using the given overrides>;
        funs = <result from packageSetFuns, contains all package functions, split into deep/shallow>;
      }
@@ -317,6 +277,75 @@ let
       lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
   in original // lowercased;
 
+  createSet = spec: super:
+    lib.mapAttrs (pname: value:
+      let
+        localMeta = meta // {
+          inherit (spec) channels;
+
+          fromNixpkgs = super.${pname} or (throw "`meta.fromNixpkgs` is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
+          inherit ownOutput;
+
+          inherit scope;
+
+          mapDirectory = dir:
+            lib.mapAttrs (name: value: callPackage value.value { })
+            (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
+
+          importNix =
+            { channel ? meta.importingChannel, project, path, ... }@args:
+            let
+              source = meta.getChannelSource channel project args;
+              fullPath = source.src + "/${path}";
+              fullPathChecked = if builtins.pathExists fullPath then
+                fullPath
+              else
+                throw
+                "`meta.importNix` in ${value.path}: File ${path} doesn't exist in source for project ${project} in channel ${meta.importingChannel}";
+            in {
+              # flox edit should edit the path specified here
+              _floxPath = fullPath;
+            } // ownCallPackage fullPathChecked { };
+        };
+
+
+        # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
+        # A callPackage abstraction that allows specifying multiple attribute sets might be nice
+        createScope = isOwn: baseScope // spec.extraScope // lib.optionalAttrs isOwn {
+          ${pname} = /*lib.warn ''
+            Package definition ${value.path} references attribute "${pname}" in its arguments, which is ambiguous. Resolve the ambiguity accordingly:
+            - For overriding the nixpkgs package with attribute "${pname}", refer to `meta.fromNixpkgs` instead by adding `meta` to the argument list
+            - For accessing this channels "${pname}" output attribute itself, use `meta.ownOutput` instead by adding `meta` to the argument list
+            Defaulting to `meta.fromNixpkgs` for backwards compatibility
+          '' */localMeta.fromNixpkgs;
+        } // {
+          # These attributes are reserved
+          meta = localMeta;
+          inherit (localMeta) channels;
+          flox = localMeta.channels.flox or (throw
+            "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
+
+          # What should pkgs be, the pkgs set or the scope?
+          # pkgs = myPkgs;
+          inherit callPackage;
+        };
+
+        ownCallPackage = lib.callPackageWith (createScope true);
+
+        scope = createScope false;
+        callPackage = lib.callPackageWith scope;
+
+        ownOutput = {
+          # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
+          # Note that we let the callPackage result override this because builders
+          # like flox.importNix are able to provide a more accurate file location
+          _floxPath = value.path;
+        } // ownCallPackage value.value { };
+      in
+        withVerbosity 8 (builtins.trace
+          "[channel ${myArgs.name}] [packageSet ${spec.name}] Auto-calling package ${pname}") ownOutput
+    );
+
   # All the overlays that should be applied to the pkgs base set for this
   # channels evaluation (and all the channels it imports)
   myOverlays = let
@@ -340,7 +369,7 @@ let
             withVerbosity 5 (builtins.trace "[channel ${myArgs.name}] [path ${
                 lib.concatStringsSep "." spec.path
               }] Creating overriding package set") spec.deepOverride superSet
-            (createSet spec.name superSet spec.packageScope spec.funs.deep));
+            (createSet spec superSet spec.funs.deep));
       in mergeSets (map deepOverlaySet deepOutputSpecs);
 
     # See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#channel-dependencies for why this order seems to be reversed
@@ -362,7 +391,7 @@ let
           }] Output attribute ${name} comes from ${source}");
 
       shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
-        (createSet spec.name packageSet spec.packageScope spec.funs.shallow);
+        (createSet spec packageSet spec.funs.shallow);
 
       # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
       deepOutputs = withVerbosity 7 (outputTrace "deep override")
@@ -392,9 +421,7 @@ let
     ownChannel = myArgs.name;
     importingChannel = parentArgs.name;
     inherit withVerbosity;
-    mapDirectory = callPackage: dir:
-      lib.mapAttrs (name: value: callPackage value.value { })
-      (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
+    inherit outputs;
   };
 
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix

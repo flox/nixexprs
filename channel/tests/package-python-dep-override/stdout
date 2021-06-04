@@ -1,1 +1,1 @@
-{ black = { blackName = "python3.8-black-19.10b0"; blackName2 = "python3.8-black-19.10b0"; tomlResult = "my-toml"; tomlResult2 = "my-toml"; }; }
+{ black = { blackName = "python3.8-black-19.10b0"; blackName2 = "overriddenblack"; tomlResult = "my-toml"; tomlResult2 = "my-toml"; }; }

@@ -3,7 +3,7 @@
 # from metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ lib, beamPackages, meta, ... }:
+{ lib, beamPackages, buildErlangMk, meta, ... }:
 
 # Arguments provided to flox.mkDerivation()
 { project # the name of the project, required
@@ -11,7 +11,7 @@
 let
   source = meta.getChannelSource channel project args;
   # Actually create the derivation.
-in beamPackages.buildErlangMk (removeAttrs args [ "channel" ] // {
+in buildErlangMk (removeAttrs args [ "channel" ] // {
   # build-erlang-mk.nix re-appends the version to the name,
   # so we need to not inherit name and instead pass what we
   # call "pname" as "name".

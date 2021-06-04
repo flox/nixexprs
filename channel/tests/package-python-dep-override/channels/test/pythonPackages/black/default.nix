@@ -1,4 +1,5 @@
 { black, toml, pythonPackages }: {
+  name = "overriddenblack";
   result = {
     blackName = black.name;
     tomlResult = toml.result;
