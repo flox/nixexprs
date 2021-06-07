@@ -1,1 +1,1 @@
-{ meta, callPackage }: meta.mapDirectory callPackage ../javaPackages
+{ meta }: meta.mapDirectory ../javaPackages { }
