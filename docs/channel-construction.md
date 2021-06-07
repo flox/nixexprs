@@ -122,6 +122,10 @@ The channel from which this channel is accessed. In case this channel is accesse
 
 Like [`getChannelSource`](#getChannelSource-channel-project-overrides), but with [`ownChannel`](#ownChannel) passed as the `<channel>` argument.
 
+#### `scope`
+
+The scope with which the current package has been auto-called, useful if the scope needs to be extended.
+
 #### `withVerbosity <verbosity> <fun> <arg>`
 
 Applies `<fun>` to `<arg>` only if the configured `debugVerbosity` is equal or higher than `<verbosity>`. With `<fun>` doing tracing, this allows controlling the verbosity level of the traced value. Example: `withVerbosity 5 (builtins.trace "Some message") 1`
