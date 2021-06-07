@@ -285,8 +285,10 @@ let
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
         # A callPackage abstraction that allows specifying multiple attribute sets might be nice
         createScope = isOwn:
-          baseScope // spec.extraScope
-          // lib.optionalAttrs isOwn { ${pname} = super.${pname}; } // {
+          baseScope // spec.extraScope // lib.optionalAttrs isOwn {
+            ${pname} = super.${pname} or (throw
+              "${pname} is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
+          } // {
             # These attributes are reserved
             meta = localMeta;
             inherit (localMeta) channels;
