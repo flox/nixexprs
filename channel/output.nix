@@ -109,15 +109,12 @@ let
         let path = dir + "/${name}";
         in {
           directory = lib.nameValuePair name {
-            # TODO: Better error when there's no default.nix?
-            value = import path;
             deep = builtins.pathExists (path + "/deep-override");
             inherit path type;
           };
 
           regular = if lib.hasSuffix ".nix" name then
             lib.nameValuePair (lib.removeSuffix ".nix" name) {
-              value = import path;
               deep = false;
               inherit path type;
             }
@@ -284,6 +281,11 @@ let
           inherit (spec) channels;
 
           inherit scope;
+
+          mapDirectory = dir:
+            { call ? path: callPackage path { } }:
+            lib.mapAttrs (name: value: call value.path)
+            (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
         };
 
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
@@ -311,7 +313,7 @@ let
           # Note that we let the callPackage result override this because builders
           # like flox.importNix are able to provide a more accurate file location
           _floxPath = value.path;
-        } // ownCallPackage value.value { };
+        } // ownCallPackage value.path { };
       in withVerbosity 8 (builtins.trace
         "[channel ${myArgs.name}] [packageSet ${spec.name}] Auto-calling package ${pname}")
       ownOutput);
@@ -391,9 +393,6 @@ let
     ownChannel = myArgs.name;
     importingChannel = parentArgs.name;
     inherit withVerbosity;
-    mapDirectory = callPackage: dir:
-      lib.mapAttrs (name: value: callPackage value.value { })
-      (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
   };
 
   # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
