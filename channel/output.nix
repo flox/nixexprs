@@ -280,7 +280,11 @@ let
   createSet = spec: super:
     lib.mapAttrs (pname: value:
       let
-        localMeta = meta // { inherit (spec) channels; };
+        localMeta = meta // {
+          inherit (spec) channels;
+
+          inherit scope;
+        };
 
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
         # A callPackage abstraction that allows specifying multiple attribute sets might be nice
