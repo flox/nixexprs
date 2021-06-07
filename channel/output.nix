@@ -286,6 +286,21 @@ let
             { call ? path: callPackage path { } }:
             lib.mapAttrs (name: value: call value.path)
             (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
+
+          importNix =
+            { channel ? meta.importingChannel, project, path, ... }@args:
+            let
+              source = meta.getChannelSource channel project args;
+              fullPath = source.src + "/${path}";
+              fullPathChecked = if builtins.pathExists fullPath then
+                fullPath
+              else
+                throw
+                "`meta.importNix` in ${value.path}: File ${path} doesn't exist in source for project ${project} in channel ${meta.importingChannel}";
+            in {
+              # flox edit should edit the path specified here
+              _floxPath = fullPath;
+            } // ownCallPackage fullPathChecked { };
         };
 
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
