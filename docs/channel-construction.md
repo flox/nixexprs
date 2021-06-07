@@ -173,3 +173,18 @@ The function to call on each path to transform it to a value. Defaults to `path:
 ##### Returns
 
 An attribute set containing attributes for every `<directory>/<name>.nix` file and every `<directory>/<name>` subdirectory, the files are turned to values with `<callPackage>`.
+
+## `importNix { path, project, channel?, ... }` (experimental)
+
+An experimental convenience function for deferring a package definition to a Nix file in the project repository itself.
+
+##### Inputs
+- `path` (string, mandatory): The relative Nix file path within `<project>` to use for defining this package. If this is a directory, its `default.nix` file will be used. This file is then treated as if it stood in for the `importNix` definition, getting access to the [same call scope](./channel-construction.md#call-scope).
+- `project` (string, mandatory): The name of the GitHub repository in your organization to use for getting the Nix file source of this package. This is passed as the [`<project>` argument](./channel-construction.md#argument-project-string) to `meta.getChannelSource`.
+- `channel` (string, optional, default [`meta.importingChannel`](./channel-construction.md#importingchannel)): The name of the channel, aka GitHub user/organization to get the `<project>` from. Defaults to the channel that uses/imports this builder. This is passed as the [`<channel>` argument](./channel-construction.md#argument-channel-string) to `meta.getChannelSource`.
+- All other arguments are passed as the [`<overrides>` argument](./channel-construction.md#argument-overrides-string) to `meta.getChannelSource`. See [its documentation](channel-construction.md#getchannelsource-channel-project-overrides) for how the source can be influenced with this.
+
+##### Returns
+The result of the Nix file specified in the arguments, as if that file were in this ones place.
+
+Assuming it uses a flox builder, it also contains the [common return attributes](#common-return-attributes).
