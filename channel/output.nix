@@ -67,9 +67,9 @@ let
       lDrv = lib.isDerivation l;
       rDrv = lib.isDerivation r;
       prettyPath = lib.concatStringsSep "." path;
-      error = "Trying to override ${
-          lib.optionalString (!lDrv) "non-"
-        }derivation in nixpkgs"
+      warning = "Overriding ${lib.optionalString (!lDrv) "non-"}derivation ${
+          lib.concatStringsSep "." path
+        } in nixpkgs"
         + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
     in if lDrv == rDrv then
     # If both sides are derivations, override completely
@@ -89,7 +89,7 @@ let
             builtins.typeOf l
           } and right is ${builtins.typeOf r}") true
     else
-      throw error);
+      lib.warn warning true);
 
   # Turns a directory into an attribute set.
   # Files with a .nix suffix get turned into an attribute name without the
@@ -258,9 +258,6 @@ let
               # Only pass the super version if it doesn't override an unoverridable attribute!
               // lib.optionalAttrs (!unoverridable ? ${pname}) {
                 ${pname} = super.${pname};
-                ${spec.callScopeAttr} = packageSetScope // {
-                  ${pname} = super.${pname};
-                };
               };
             inherit funs;
           };

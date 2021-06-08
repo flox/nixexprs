@@ -3,7 +3,7 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ python, pythonPackages, lib, meta }:
+{ python, pythonPackages, buildPythonPackage, lib, meta }:
 
 # Arguments provided to flox.buildPythonPackage()
 { project # the name of the project, required
@@ -15,7 +15,7 @@ in builtins.trace (''flox.buildPythonPackage(project="'' + project + ''", ''
   + builtins.toString (builtins.length (builtins.attrNames pythonPackages))
   + " pythonPackages)")
 # Actually create the derivation.
-pythonPackages.buildPythonPackage (removeAttrs args [ "channel" ] // {
+buildPythonPackage (removeAttrs args [ "channel" ] // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
