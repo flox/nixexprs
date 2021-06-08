@@ -42,11 +42,11 @@ in let
           let
             # Find a channel mapping in NIX_PATH that matches the name
             # This is case-insensitive because GitHub usernames are as well
-            found =
-              lib.findFirst (e: lib.toLower e.name == lib.toLower value.success)
-              null channelFloxpkgsList;
+            found = lib.findFirst
+              (name: lib.toLower name == lib.toLower value.success) null
+              (lib.attrNames channelFloxpkgs);
           in if found != null then {
-            success = found.name;
+            success = found;
           } else {
             success = lib.warn
               "Inferred channel name ${value.success} using heuristic ${name}, but no entry for this channel found in NIX_PATH"
@@ -76,8 +76,9 @@ in let
       };
       gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
       nixPath = let
-        matchingEntries = lib.filter (e: e.path == topdir) channelFloxpkgsList;
-        matchingNames = lib.unique (map (e: e.name) matchingEntries);
+        matchingEntries =
+          lib.filterAttrs (name: e: e.path == topdir) channelFloxpkgs;
+        matchingNames = lib.attrNames matchingEntries;
       in if lib.length matchingNames == 0 then {
         failure = "No entries in NIX_PATH match path ${topdir}";
       } else if lib.length matchingNames == 1 then {
@@ -121,50 +122,53 @@ in let
   #
   # See https://github.com/flox/floxpkgs/blob/staging/docs/expl/channel-discovery.md
   # for an explanation of why channels are discovered through NIX_PATH
-  channelFloxpkgsList = let
+  channelFloxpkgs = let
     expandEntry = e:
       if e.prefix != "" then [{
         name = e.prefix;
-        path = e.path;
+        value = e.path;
       }]
       # TODO: Change flox wrapper to do this expansion
       else
         lib.mapAttrsToList (name: type: {
-          inherit name;
-          path = e.path + "/${name}";
+          name = name;
+          value = e.path + "/${name}";
         }) (builtins.readDir e.path);
 
-    pathEntries = lib.concatMap expandEntry builtins.nixPath;
-    exprEntries = map (e: e // { value = import e.path; })
-      (lib.filter (e: builtins.pathExists (e.path + "/default.nix"))
+    pathEntries = lib.listToAttrs (lib.concatMap expandEntry builtins.nixPath);
+
+    exprEntries = lib.mapAttrs (name: path: {
+      inherit path;
+      value = import path;
+    })
+      (lib.filterAttrs (name: path: builtins.pathExists (path + "/default.nix"))
         pathEntries);
-    channelEntries = lib.filter (e:
+
+    channelEntries = lib.filterAttrs (name: e:
       let
         isFloxChannel = builtins.tryEval (lib.isFunction e.value
           && (lib.functionArgs e.value) ? _isFloxChannel);
         result = if isFloxChannel.success then
           if isFloxChannel.value then
             withVerbosity 1 (builtins.trace
-              "[channel ${e.name}] Importing from `${toString e.path}`") true
+              "[channel ${name}] Importing from `${toString e.path}`") true
           else
             withVerbosity 3 (builtins.trace
-              "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${
+              "NIX_PATH entry ${name} points to path ${e.path} which is not a flox channel (${
                 lib.generators.toPretty { } e.value
               }), ignoring this entry") false
         else
           withVerbosity 3 (builtins.trace
-            "NIX_PATH entry ${e.name} points to a path ${e.path} which can't be evaluated successfully, ignoring this entry")
+            "NIX_PATH entry ${name} points to a path ${e.path} which can't be evaluated successfully, ignoring this entry")
           false;
       in result) exprEntries;
   in withVerbosity 1 (builtins.trace
     "Found these channel-like entries in NIX_PATH: ${
-      toString (map (e: e.name) channelEntries)
+      toString (lib.attrNames channelEntries)
     }") channelEntries;
 
-  channelFloxpkgs = lib.listToAttrs channelFloxpkgsList;
-
-  importChannelSrc = name: fun:
-    fun {
+  importChannelSrc = name: e:
+    e.value {
       inherit name;
       _return = "channelArguments";
     };

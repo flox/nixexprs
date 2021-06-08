@@ -1,1 +1,1 @@
-{ bar = "channels-alt/bar"; baz = "channels-alt/baz"; flox = "unknown"; foo = "channels/foo"; root = "channels/root"; }
+{ baz = "channels-alt/baz"; flox = "unknown"; root = "channels/root"; }
