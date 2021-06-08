@@ -180,37 +180,15 @@ let
     };
 
   # TODO: What if you want to override e.g. pkgs.xorg.libX11. Make sure to recurse into attributes
-  toplevel = let
-    unoverridable = {
-      inherit meta;
-      channels = channelOutputs;
-      flox = channelOutputs.flox or (throw
-        "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
-      callPackage = lib.callPackageWith scope;
-    };
-    scope = baseScope // unoverridable;
-  in {
+  toplevel = {
     name = "toplevel";
     recurse = true;
     deepOverride = a: b: b;
     path = [ ];
-    packageScope = super: pname:
-      scope
-      # Only pass the super version if it doesn't override an unoverridable attribute!
-      // lib.optionalAttrs (!unoverridable ? ${pname}) {
-        ${pname} = super.${pname};
-      };
+    extraScope = { };
+    channels = channelOutputs;
     funs = packageSetFuns "toplevel" "pkgs";
   };
-
-  createSet = name: super: packageScope:
-    lib.mapAttrs (pname: value:
-      withVerbosity 8 (builtins.trace
-        "[channel ${myArgs.name}] [packageSet ${name}] Auto-calling package ${pname}")
-      (lib.callPackageWith (packageScope super pname) value.value { } // {
-        # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
-        _floxPath = value.path;
-      }));
 
   packageSetOutputs = setName: spec:
     let
@@ -234,32 +212,18 @@ let
                 }`";
             }) channelOutputs;
 
-          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope;
-
-          unoverridable = {
-            inherit channels meta;
-            ${spec.callScopeAttr} = packageSetScope;
-            flox = channels.flox or (throw
-              "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
-            callPackage = lib.callPackageWith scope;
-          };
-
-          scope = baseScope // packageSetScope // unoverridable;
+          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope
+            // {
+              ${spec.callScopeAttr} = packageSetScope;
+            };
 
           output = path: {
             name = setName;
             inherit path;
             recurse = paths.recurse;
             deepOverride = spec.deepOverride;
-            # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
-            # A callPackage abstraction that allows specifying multiple attribute sets might be nice
-            packageScope = super: pname:
-              scope
-              # Only pass the super version if it doesn't override an unoverridable attribute!
-              // lib.optionalAttrs (!unoverridable ? ${pname}) {
-                ${pname} = super.${pname};
-              };
-            inherit funs;
+            extraScope = packageSetScope;
+            inherit channels funs;
           };
 
           aliasOutput = path: {
@@ -280,7 +244,8 @@ let
        name = <name for this output set>;
        path = <attribute path where this set should end up in the channels result>;
        recurse = <bool whether it should be recursed into by hydra>;
-       packageScope = <super: pname: The scope to call a specific package pname with>;
+       extraScope = <attribute set of additional scope to provide to auto-called packages>;
+       channels = <channel attribute set to provide in the scope>;
        deepOverride = <set: overrides: How to deeply override this output with nixpkgs overlays using the given overrides>;
        funs = <result from packageSetFuns, contains all package functions, split into deep/shallow>;
      }
@@ -312,6 +277,39 @@ let
       lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
   in original // lowercased;
 
+  createSet = spec: super:
+    lib.mapAttrs (pname: value:
+      let
+        localMeta = meta // { inherit (spec) channels; };
+
+        # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
+        # A callPackage abstraction that allows specifying multiple attribute sets might be nice
+        createScope = isOwn:
+          baseScope // spec.extraScope
+          // lib.optionalAttrs isOwn { ${pname} = super.${pname}; } // {
+            # These attributes are reserved
+            meta = localMeta;
+            inherit (localMeta) channels;
+            flox = localMeta.channels.flox or (throw
+              "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
+            inherit callPackage;
+          };
+
+        ownCallPackage = lib.callPackageWith (createScope true);
+
+        scope = createScope false;
+        callPackage = lib.callPackageWith scope;
+
+        ownOutput = {
+          # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
+          # Note that we let the callPackage result override this because builders
+          # like flox.importNix are able to provide a more accurate file location
+          _floxPath = value.path;
+        } // ownCallPackage value.value { };
+      in withVerbosity 8 (builtins.trace
+        "[channel ${myArgs.name}] [packageSet ${spec.name}] Auto-calling package ${pname}")
+      ownOutput);
+
   # All the overlays that should be applied to the pkgs base set for this
   # channels evaluation (and all the channels it imports)
   myOverlays = let
@@ -335,7 +333,7 @@ let
             withVerbosity 5 (builtins.trace "[channel ${myArgs.name}] [path ${
                 lib.concatStringsSep "." spec.path
               }] Creating overriding package set") spec.deepOverride superSet
-            (createSet spec.name superSet spec.packageScope spec.funs.deep));
+            (createSet spec superSet spec.funs.deep));
       in mergeSets (map deepOverlaySet deepOutputSpecs);
 
     # See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#channel-dependencies for why this order seems to be reversed
@@ -357,7 +355,7 @@ let
           }] Output attribute ${name} comes from ${source}");
 
       shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
-        (createSet spec.name packageSet spec.packageScope spec.funs.shallow);
+        (createSet spec packageSet spec.funs.shallow);
 
       # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
       deepOutputs = withVerbosity 7 (outputTrace "deep override")
