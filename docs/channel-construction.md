@@ -69,7 +69,6 @@ In addition, for all package sets in [above table](#subdirectories) that have a 
 - `<attr>`: A version-agnostic package set consisting of:
   - The packages in nixpkgs
   - This channels packages
-  - `<name>`: The package in nixpkgs of the same name as the one defined. This allows package overriding without getting infinite recursion
 - All attributes of the above set
 - `channels`: An attribute set containing the outputs of all other available channels:
   - `channels.<channel>.<output>`: Output attribute `<output>` of channel `<channel>`

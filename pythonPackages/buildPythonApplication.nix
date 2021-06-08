@@ -3,7 +3,7 @@
 # metadata cached by the nixpkgs mechanism.
 
 # Arguments provided to callPackage().
-{ python, pythonPackages, lib, meta }:
+{ python, pythonPackages, buildPythonApplication, lib, meta }:
 
 # Arguments provided to flox.mkDerivation()
 { project # the name of the project, required
@@ -15,7 +15,7 @@ in builtins.trace (''flox.buildPythonApplication(project="'' + project + ''", ''
   + " pythonPackages)")
 
 # Actually create the derivation.
-pythonPackages.buildPythonApplication (removeAttrs args [ "channel" ] // {
+buildPythonApplication (removeAttrs args [ "channel" ] // {
   inherit (source) version src pname;
 
   # This for one sets meta.position to where the project is defined
