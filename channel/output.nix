@@ -1,26 +1,8 @@
 # Returns the auto-generated output of a channel
 # TODO: Add debug logs
-{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides }:
+{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides, packageSets }:
 let
   inherit (pkgs) lib;
-
-  pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
-  pregenResult = if builtins.pathExists pregenPath then
-    withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}")
-    (lib.importJSON pregenPath)
-  else
-    lib.warn
-    "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slow"
-    (import ./package-sets.nix {
-      inherit lib;
-      pregenerate = true;
-      nixpkgs = <nixpkgs>;
-    });
-
-  packageSets = import ./package-sets.nix {
-    inherit lib pregenResult;
-    pregenerate = false;
-  };
 
   # TODO: Better error
   redactedError = path: lib.setAttrByPath path (throw "Tried to access redacted path ${lib.concatStringsSep "." path}");

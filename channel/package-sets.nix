@@ -71,10 +71,12 @@ let
       versions = lib.filterAttrs (version: res: res != null)
         (lib.mapAttrs annotateVersionPaths versionPaths);
 
+      defaultVersion = versionForPackageSet pkgs.${callScopeAttr};
+
     in if pregenerate then {
-      inherit versions toplevelBlacklist;
+      inherit versions toplevelBlacklist defaultVersion;
     } else {
-      inherit (pregenResult.${setName}) versions toplevelBlacklist;
+      inherit (pregenResult.${setName}) versions toplevelBlacklist defaultVersion;
       inherit callScopeAttr deepOverride populateToplevel;
     };
 

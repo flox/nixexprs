@@ -1,5 +1,5 @@
 # Arguments for the channel file in floxpkgs
-{ name ? null, topdir, extraOverlays ? [ ] }@chanArgs:
+{ name ? null, topdir, extraOverlays ? [ ], defaultLibraryVersions ? {} }@chanArgs:
 
 # Arguments for the command line
 { name ? null, debugVerbosity ? 0
@@ -173,18 +173,34 @@ in let
     ${name} = myChannelArgs;
   };
 
+
+  pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
+  pregenResult = if builtins.pathExists pregenPath then
+    withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}")
+    (lib.importJSON pregenPath)
+  else
+    lib.warn
+    "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slow"
+    (import ./package-sets.nix {
+      inherit lib;
+      pregenerate = true;
+      nixpkgs = <nixpkgs>;
+    });
+
+  packageSets = import ./package-sets.nix {
+    inherit lib pregenResult;
+    pregenerate = false;
+  };
+
   outputFun = import ./output.nix {
-    inherit outputFun channelArgs pkgs withVerbosity;
+    inherit outputFun channelArgs pkgs withVerbosity packageSets;
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
   };
 
+  libraryVersions = lib.mapAttrs (name: value: value.defaultVersion) packageSets // defaultLibraryVersions;
+
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = outputFun [ ] myChannelArgs myChannelArgs {
-    erlang = "23.1";
-    haskell = "8.8.4";
-    perl = "5.32.0";
-    python = "2.7.18";
-  };
+  outputs = outputFun [ ] myChannelArgs myChannelArgs libraryVersions;
   channelArguments = myChannelArgs;
 }.${_return}
