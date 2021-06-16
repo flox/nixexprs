@@ -151,13 +151,16 @@ let
         let path = dir + "/${name}";
         in {
           directory = lib.nameValuePair name {
+            # TODO: Allow specified deepOverride = true in config.nix
             deep = builtins.pathExists (path + "/deep-override");
+            config = if builtins.pathExists (path + "/config.nix") then import (path + "/config.nix") else {};
             inherit path type;
           };
 
           regular = if lib.hasSuffix ".nix" name then
             lib.nameValuePair (lib.removeSuffix ".nix" name) {
               deep = false;
+              config = {};
               inherit path type;
             }
           else
@@ -226,7 +229,7 @@ let
     path = [ ];
     extraScope = { };
     funs = packageSetFuns "toplevel" "pkgs";
-    config = {};
+    libraryVersions = {};
   };
 
   packageSetOutputs = setName: spec:
@@ -249,7 +252,7 @@ let
             deepOverride = spec.deepOverride;
             extraScope = packageSetScope;
             inherit funs;
-            config.${setName} = version;
+            libraryVersions.${setName} = version;
           };
 
           aliasOutput = path: {
@@ -258,10 +261,17 @@ let
             aliasedPath = paths.canonicalPath;
           };
 
-        in [ (output paths.canonicalPath) ] ++ map aliasOutput paths.aliases;
+        in [ (output paths.canonicalPath) ] ++
+          map aliasOutput (lib.lists.remove [ spec.callScopeAttr ] paths.aliases);
 
       results =
-        lib.concatLists (lib.mapAttrsToList versionOutput spec.versions);
+        lib.concatLists (lib.mapAttrsToList versionOutput spec.versions) ++ [
+          {
+            name = setName;
+            path = [ spec.callScopeAttr ];
+            aliasedPath = spec.versions.${libraryVersions.${setName}}.canonicalPath;
+          }
+        ];
 
     in lib.optionals (funs.deep != { } || funs.shallow != { }) results;
 
@@ -314,8 +324,32 @@ let
     lib.mapAttrs (pname: value:
       let
 
-        # TODO: Use config.nix, app vs lib, etc.
-        packageSetVersions = libraryVersions // spec.config;
+        libraryVersions' = libraryVersions // spec.libraryVersions;
+
+        packageSetVersions = lib.mapAttrs (name: pvalue:
+          if ! packageSets ? ${name} then
+            (throw ''
+              In ${value.path}/config.nix, packageSets.${name} was defined, but no such package set exists.
+              Existing ones are ${lib.concatStringsSep ", " (lib.attrNames packageSets)}
+            '')
+          else if ! pvalue ? type then
+            (throw ''
+              In ${value.path}/config.nix, packageSets.${name}.type is not specified
+              Select either "app" or "lib"
+            '')
+          else {
+            app = pvalue.app.version or
+              (throw ''
+                In ${value.path}/config.nix, packageSets.${name}.type is set to "app", but no version was given.
+                Set one with packageSets.${name}.app.version. Available values are [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames packageSets.${name}.versions)} ]
+              '');
+            lib = libraryVersions'.${name};
+          }.${pvalue.type} or
+          (throw ''
+            In ${value.path}/config.nix, packageSets.${name}.type is specified to be "${pvalue.type}", which is not a valid value.
+            Select either "app" or "lib"
+          '')
+        ) (value.config.packageSets or {});
 
         repopulate = channel: { original, redacted }:
           lib.foldl' (set: name:
@@ -331,13 +365,14 @@ let
               result = if channel == null then toplevelResult else withCallScopeAttr;
               context = if channel == null then "toplevel scope" else "channel ${channel}";
             in
-              builtins.trace "For ${context} for ${lib.concatStringsSep "." (spec.path ++ [ pname ])}, allowing access to ${lib.concatStringsSep "." canonicalPath} from ${setInfo.callScopeAttr}"
-                result
+              builtins.seq version (builtins.trace "For ${context} for ${lib.concatStringsSep "." (spec.path ++ [ pname ])}, allowing access to ${lib.concatStringsSep "." canonicalPath} from ${setInfo.callScopeAttr}"
+                # Force early version resolution error
+                result)
           ) redacted (lib.attrNames packageSetVersions);
 
         channels =
           let
-            cased = lib.mapAttrs repopulate (channelOutputs packageSetVersions);
+            cased = lib.mapAttrs repopulate (channelOutputs libraryVersions');
 
             lowercased =
               lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) cased;
