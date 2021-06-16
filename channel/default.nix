@@ -180,6 +180,11 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = outputFun [ ] myChannelArgs myChannelArgs;
+  outputs = outputFun [ ] myChannelArgs myChannelArgs {
+    erlang = "23.1";
+    haskell = "8.8.4";
+    perl = "5.32.0";
+    python = "2.7.18";
+  };
   channelArguments = myChannelArgs;
 }.${_return}

@@ -44,7 +44,7 @@
           );
         in
           # If all parameters are filled out, apply the function to them
-          if index == count then function args
+          if index == count then builtins.trace "memoizeFunctionParameters: Calling function with arguments ${lib.generators.toPretty { multiline = false; } args}" (function args)
           # Only if that's not the case, return the table
           else table;
 
@@ -61,10 +61,11 @@
       fullTable = paramTable {} 0;
 
     in args:
-      assert (lib.attrNames args == params);
-      lib.foldl' (table: argName:
+      if lib.attrNames args != params then
+        throw "Provided arguments [ ${lib.concatStringsSep ", " (lib.attrNames args)} ] don't match memoized parameters [ ${lib.concatStringsSep ", " params} ]"
+      else lib.foldl' (table: argName:
         let argValue = args.${argName}; in
-        table.${argValue} or (throw "memoizeFunctionParameters: Parameter \"${argName}\" was not declared to memoize value \"${argValue}\"")
+        table.${argValue} or (throw "memoizeFunctionParameters: Parameter \"${argName}\" was not declared to memoize value \"${argValue}\". Only values [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames table)} ] are memoized")
       ) fullTable (lib.attrNames args);
 
   test = let

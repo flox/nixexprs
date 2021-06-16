@@ -4,6 +4,10 @@
   exitCode = 1;
   nixPath = [
     {
+      prefix = "nixpkgs-pregen";
+      path = ./channels/nixpkgs-pregen;
+    }
+    {
       prefix = "nixpkgs";
       path = nixpkgs;
     }

@@ -22,6 +22,39 @@ let
     pregenerate = false;
   };
 
+  # TODO: Better error
+  redactedError = path: lib.setAttrByPath path (throw "Tried to access redacted path ${lib.concatStringsSep "." path}");
+
+  /*
+  Redacting:
+  - For channels and toplevel, for all package sets and all versions, remove their canonicalPath's and aliasedPath's, and the package sets callScopeAttr
+  - For toplevel additionally remove all toplevelBlacklist's
+
+  Repopulating:
+  - For all allowed package sets,
+    - For toplevel and channels, set callScopeAttr to the set
+    - For toplevel, also use populateToplevel
+  */
+  redactingSet =
+    let
+      lists = lib.concatLists (lib.mapAttrsToList (name: value:
+        let
+          versionSets = lib.concatLists (lib.mapAttrsToList (name: value:
+            [ (redactedError value.canonicalPath) ] ++ map redactedError value.aliases
+          ) value.versions);
+        in [ (redactedError [ value.callScopeAttr ]) ] ++ versionSets
+      ) packageSets);
+      result = mergeSets lists;
+    in builtins.trace (toString (lib.attrNames result)) result;
+
+  toplevelRedactingSet =
+    let
+      lists = lib.concatLists (lib.mapAttrsToList (name: value:
+        map redactedError value.toplevelBlacklist
+      ) packageSets);
+      result = mergeSets lists;
+    in builtins.trace (toString (lib.attrNames result)) result;
+
   # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though
   mergeSets = lib.foldl' lib.recursiveUpdate { };
 
@@ -56,9 +89,18 @@ let
         hydraSetAttrByPath recurse (lib.tail attrPath) value // {
           recurseForDerivations = recurse;
         };
+      };
+
+  updateAttrByPath = path: value: set:
+    if path == [] then value
+    else set // {
+      ${lib.head path} = updateAttrByPath (lib.tail path) value (set.${lib.head path} or {});
     };
 
-in parentOverlays: parentArgs: myArgs:
+  inherit (import ./memoizeFunctionParameters.nix { inherit lib; }) memoizeFunctionParameters;
+
+# libraryVersions of the form { python = "<full-version>"; perl = "<full-version>"; ... }
+in parentOverlays: parentArgs: myArgs: libraryVersions:
 let
   # Merges attribute sets recursively, but not recursing into derivations,
   # and error if a derivation is overridden with a non-derivation, or the other way around
@@ -183,8 +225,8 @@ let
     deepOverride = a: b: b;
     path = [ ];
     extraScope = { };
-    channels = channelOutputs;
     funs = packageSetFuns "toplevel" "pkgs";
+    config = {};
   };
 
   packageSetOutputs = setName: spec:
@@ -195,21 +237,7 @@ let
       versionOutput = version: paths:
         let
 
-          # This maps channels to e.g. have pythonPackages be the correct version
-          channels = lib.mapAttrs (name: value:
-            # If the dependent channel has the package set with the correct version,
-            let set = lib.attrByPath paths.canonicalPath null value;
-            in value // {
-              ${spec.callScopeAttr} = if set != null then
-                set
-                # maybe TODO: Try out all aliases to see if any of them have a matching version
-              else
-                throw "Channel ${name} did not provide attribute path `${
-                  lib.concatStringsSep "." paths.canonicalPath
-                }`";
-            }) channelOutputs;
-
-          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope
+          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope.original
             // {
               ${spec.callScopeAttr} = packageSetScope;
             };
@@ -220,7 +248,8 @@ let
             recurse = paths.recurse;
             deepOverride = spec.deepOverride;
             extraScope = packageSetScope;
-            inherit channels funs;
+            inherit funs;
+            config.${setName} = version;
           };
 
           aliasOutput = path: {
@@ -258,6 +287,8 @@ let
   outputSpecs = [ toplevel ]
     ++ lib.concatLists (lib.mapAttrsToList packageSetOutputs packageSets);
 
+  allPackageSetVersions = lib.mapAttrs (name: value: lib.attrNames value.versions) packageSets;
+
   /* The outputs of each channel as imported by this channel.
 
      This calls this very function of this file (outputFun) again, but with this
@@ -265,20 +296,57 @@ let
      means that there is no caching of channel outputs between different accessors
      of that channel. In turn however this allows deep overrides over the whole
      channel dependency tree.
+
+    { python, perl, haskell, erlang }: { <channel> = { original = <outputs>; redacted = <redacted outputs>; }; };
   */
-  channelOutputs = let
-    original =
-      lib.mapAttrs (name: args: outputFun myOverlays myArgs args) channelArgs;
-    # Also allow each channel to be referenced by its all-lowercase name
-    lowercased =
-      lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
-  in original // lowercased;
+  channelOutputs = memoizeFunctionParameters allPackageSetVersions (packageSetVersions:
+    lib.mapAttrs (name: args:
+      let original = outputFun myOverlays myArgs args packageSetVersions;
+      in {
+        inherit original;
+        redacted = lib.recursiveUpdate original redactingSet;
+      }
+    ) channelArgs
+  );
+
 
   createSet = spec: super:
     lib.mapAttrs (pname: value:
       let
+
+        # TODO: Use config.nix, app vs lib, etc.
+        packageSetVersions = libraryVersions // spec.config;
+
+        repopulate = channel: { original, redacted }:
+          lib.foldl' (set: name:
+            let
+              version = packageSetVersions.${name};
+              setInfo = packageSets.${name};
+              canonicalPath = setInfo.versions.${version}.canonicalPath or
+                (throw "No version ${version} for ${name}, available ones are [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames setInfo.versions)} ]");
+              canonicalSet = lib.getAttrFromPath canonicalPath original;
+
+              withCallScopeAttr = updateAttrByPath [ setInfo.callScopeAttr ] canonicalSet set;
+              toplevelResult = withCallScopeAttr // setInfo.populateToplevel canonicalSet;
+              result = if channel == null then toplevelResult else withCallScopeAttr;
+              context = if channel == null then "toplevel scope" else "channel ${channel}";
+            in
+              builtins.trace "For ${context} for ${lib.concatStringsSep "." (spec.path ++ [ pname ])}, allowing access to ${lib.concatStringsSep "." canonicalPath} from ${setInfo.callScopeAttr}"
+                result
+          ) redacted (lib.attrNames packageSetVersions);
+
+        channels =
+          let
+            cased = lib.mapAttrs repopulate (channelOutputs packageSetVersions);
+
+            lowercased =
+              lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) cased;
+          in cased // lowercased;
+
+        repopulatedBaseScope = repopulate null baseScope;
+
         localMeta = meta // {
-          inherit (spec) channels;
+          inherit channels;
 
           inherit scope;
 
@@ -306,7 +374,7 @@ let
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
         # A callPackage abstraction that allows specifying multiple attribute sets might be nice
         createScope = isOwn:
-          baseScope // spec.extraScope // lib.optionalAttrs isOwn {
+          repopulatedBaseScope // spec.extraScope // lib.optionalAttrs isOwn {
             ${pname} = super.${pname} or (throw
               "${pname} is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
           } // {
@@ -410,8 +478,14 @@ let
     inherit withVerbosity;
   };
 
-  # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
-  baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
+  baseScope =
+    # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
+    let original = smartMerge (myPkgs // myPkgs.xorg) outputs;
+    in {
+      inherit original;
+      # TODO: Make sure this throws the correct errors
+      redacted = lib.recursiveUpdate (lib.recursiveUpdate original redactingSet) toplevelRedactingSet;
+    };
 
 in withVerbosity 3 (builtins.trace
   ("[channel ${myArgs.name}] Evaluating, being imported from ${parentArgs.name}"))

@@ -36,6 +36,7 @@ let
   */
   packageSet = setName:
     { versionForPackageSet, attrPathForVersion, packageSetAttrPaths
+    , toplevelBlacklist, populateToplevel
     , callScopeAttr, deepOverride }:
     let
 
@@ -71,10 +72,10 @@ let
         (lib.mapAttrs annotateVersionPaths versionPaths);
 
     in if pregenerate then {
-      inherit versions;
+      inherit versions toplevelBlacklist;
     } else {
-      inherit (pregenResult.${setName}) versions;
-      inherit callScopeAttr deepOverride;
+      inherit (pregenResult.${setName}) versions toplevelBlacklist;
+      inherit callScopeAttr deepOverride populateToplevel;
     };
 
 in lib.mapAttrs packageSet {
@@ -113,6 +114,16 @@ in lib.mapAttrs packageSet {
 
     callScopeAttr = "haskellPackages";
 
+    toplevelBlacklist = [
+      [ "ghc" ]
+      [ "haskell" "compiler" ]
+      [ "haskell" "packages" ]
+    ];
+
+    populateToplevel = set: {
+      ghc = set.ghc;
+    };
+
     deepOverride = set: overrides:
       set.override (old: {
         overrides =
@@ -140,6 +151,21 @@ in lib.mapAttrs packageSet {
 
     callScopeAttr = "beamPackages";
 
+    toplevelBlacklist = let
+      matches = name: builtins.match "erlangR[0-9]*" name != null;
+      erlangAttrs = map lib.singleton (lib.filter matches (lib.attrNames pkgs));
+    in [
+      [ "beam" "interpreters" ]
+      [ "beam" "packages" ]
+      [ "rebar" ]
+      [ "rebar3" ]
+      [ "erlang" ]
+    ] ++ erlangAttrs;
+
+    populateToplevel = set: {
+      inherit (set) erlang rebar rebar3;
+    };
+
     deepOverride = set: overrides: set.extend (self: super: overrides);
 
   };
@@ -160,6 +186,18 @@ in lib.mapAttrs packageSet {
     in map lib.singleton names;
 
     callScopeAttr = "pythonPackages";
+
+    toplevelBlacklist = let
+      # TODO python.*Full
+      interpreterAttrs = lib.filter (name: builtins.match "python[0-9]*" name != null) (lib.attrNames pkgs);
+    in [
+      [ "pythonInterpreters" ]
+    ] ++ map lib.singleton interpreterAttrs;
+
+    populateToplevel = set: {
+      python = set.python;
+      # pythonFull = TODO
+    };
 
     deepOverride = set: overrides:
       set.override (old: {
@@ -185,6 +223,16 @@ in lib.mapAttrs packageSet {
     in map lib.singleton names;
 
     callScopeAttr = "perlPackages";
+
+    toplevelBlacklist = let
+      interpreterAttrs = lib.filter (name: builtins.match "perl[0-9]*" name != null) (lib.attrNames pkgs);
+    in [
+      [ "perlInterpreters" ]
+    ] ++ map lib.singleton interpreterAttrs;
+
+    populateToplevel = set: {
+      perl = set.perl;
+    };
 
     deepOverride = set: overrides:
       set.override
