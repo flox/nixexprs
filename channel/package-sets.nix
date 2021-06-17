@@ -17,6 +17,8 @@ let
   # This is used to determine whether nixpkgs hydra builds certain package sets
   releasePkgs = import (nixpkgs' + "/pkgs/top-level/release.nix") { };
 
+  versionTreeLib = (import ./defaultVersionTree.nix { inherit lib; }).library;
+
   /* This function turns the attributes of each package set into a structure like
 
      {
@@ -36,7 +38,7 @@ let
   */
   packageSet = setName:
     { versionForPackageSet, attrPathForVersion, packageSetAttrPaths
-    , toplevelBlacklist, populateToplevel
+    , toplevelBlacklist, populateToplevel, aliases
     , callScopeAttr, deepOverride }:
     let
 
@@ -57,27 +59,32 @@ let
 
       annotateVersionPaths = version: paths:
         let
-          canonicalPath = attrPathForVersion version;
-          valid = lib.elem canonicalPath paths;
-          aliases = lib.remove canonicalPath paths;
+          path = attrPathForVersion version;
+          valid = paths == [ path ];
           result = {
             # If this package set is built in nixpkgs hydra, also build it ourselves
-            recurse = lib.any (p: lib.attrByPath p { } releasePkgs != { })
-              ([ canonicalPath ] ++ aliases);
-            inherit canonicalPath aliases;
+            recurse = lib.attrByPath path { } releasePkgs != { };
+            inherit path;
           };
         in if valid then result else null;
 
       versions = lib.filterAttrs (version: res: res != null)
         (lib.mapAttrs annotateVersionPaths versionPaths);
 
-      defaultVersion = versionForPackageSet pkgs.${callScopeAttr};
+      versionTree =
+        let
+          baseTree = versionTreeLib.insertMultiple (lib.attrNames versions) versionTreeLib.empty;
+          withDefaults = versionTreeLib.setDefault "" (versionForPackageSet pkgs.${callScopeAttr}) baseTree;
+          withAliases = lib.foldl' (tree: attr:
+            versionTreeLib.setDefault aliases.${attr} (versionForPackageSet pkgs.${attr}) tree
+          ) withDefaults (lib.attrNames aliases);
+        in withAliases;
 
     in if pregenerate then {
-      inherit versions toplevelBlacklist defaultVersion;
+      inherit versions toplevelBlacklist versionTree;
     } else {
-      inherit (pregenResult.${setName}) versions toplevelBlacklist defaultVersion;
-      inherit callScopeAttr deepOverride populateToplevel;
+      inherit (pregenResult.${setName}) versions toplevelBlacklist versionTree;
+      inherit callScopeAttr deepOverride populateToplevel aliases;
     };
 
 in lib.mapAttrs packageSet {
@@ -111,8 +118,9 @@ in lib.mapAttrs packageSet {
       matches = name: builtins.match "ghc[0-9]*" name != null;
       names = lib.filter matches (lib.attrNames (pkgs.haskell.packages or { }));
       canonicalPaths = map (name: [ "haskell" "packages" name ]) names;
-      aliases = [ [ "haskellPackages" ] ];
-    in aliases ++ canonicalPaths;
+    in canonicalPaths;
+
+    aliases = {};
 
     callScopeAttr = "haskellPackages";
 
@@ -148,8 +156,9 @@ in lib.mapAttrs packageSet {
       matches = name: builtins.match "erlangR[0-9]*" name != null;
       names = lib.filter matches (lib.attrNames (pkgs.beam.packages or { }));
       paths = map (name: [ "beam" "packages" name ]) names;
-      aliases = [ [ "beamPackages" ] ];
-    in aliases ++ paths;
+    in paths;
+
+    aliases = {};
 
     callScopeAttr = "beamPackages";
 
@@ -183,9 +192,14 @@ in lib.mapAttrs packageSet {
       in [ attribute ];
 
     packageSetAttrPaths = let
-      matches = name: builtins.match "python[0-9]*Packages" name != null;
+      matches = name: builtins.match "python[0-9][0-9]+Packages" name != null;
       names = lib.filter matches (lib.attrNames pkgs);
     in map lib.singleton names;
+
+    aliases = {
+      python2Packages = "2";
+      python3Packages = "3";
+    };
 
     callScopeAttr = "pythonPackages";
 
@@ -220,9 +234,11 @@ in lib.mapAttrs packageSet {
       in [ attribute ];
 
     packageSetAttrPaths = let
-      matches = name: builtins.match "perl[0-9]*Packages" name != null;
+      matches = name: builtins.match "perl[0-9]+Packages" name != null;
       names = lib.filter matches (lib.attrNames pkgs);
     in map lib.singleton names;
+
+    aliases = {};
 
     callScopeAttr = "perlPackages";
 

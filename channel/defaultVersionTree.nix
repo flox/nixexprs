@@ -118,23 +118,26 @@ let
       core.insert (lib.versions.splitVersion el) acc
     ) tree versions;
 
-    setDefault = version: tree:
+    setDefault = prefix: version: tree:
       let
-        parts = lib.versions.splitVersion version;
-      in core.setDefault (lib.init parts) (lib.last parts) tree;
-
-    # setDefaultFull :: String -> Tree -> Tree
-    setDefaultFull = version: tree:
-      let
+        prefixList = lib.versions.splitVersion prefix;
+        versionList = lib.versions.splitVersion version;
+        suffixList =
+          if lib.lists.take (lib.length prefixList) versionList != prefixList
+          then throw "setDefault called with prefix \"${prefix}\" which is not a prefix of the given version \"${version}\""
+          else lib.lists.drop (lib.length prefixList) versionList;
         f = acc: el: {
           prefix = acc.prefix ++ [ el ];
           tree = core.setDefault acc.prefix el acc.tree;
         };
         initial = {
-          prefix = [];
+          prefix = prefixList;
           tree = tree;
         };
-      in (lib.foldl' f initial (lib.versions.splitVersion version)).tree;
+      in (lib.foldl' f initial suffixList).tree;
+
+    clearDefault = prefix: tree:
+      core.setDefault (lib.versions.splitVersion prefix) null tree;
 
     queryDefault = prefix: tree: lib.concatStringsSep "." (core.queryDefault (lib.versions.splitVersion prefix) tree);
 
@@ -146,6 +149,6 @@ let
       testVersions = [ "8.6.5" "8.8.2" "8.8.3" "8.8.4" "8.10.1" "8.10.2" "9.0.0" ];
     in library.queryDefault "9" (library.setDefault "8.6" (library.setDefault "8.6.5" (library.setDefaultFull "8.8.4" (library.insertMultiple testVersions library.empty))));
 
-in library // {
-  inherit core test;
+in {
+  inherit core library test;
 }

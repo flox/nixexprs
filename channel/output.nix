@@ -1,6 +1,6 @@
 # Returns the auto-generated output of a channel
 # TODO: Add debug logs
-{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides, packageSets }:
+{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides, packageSets, versionTreeLib }:
 let
   inherit (pkgs) lib;
 
@@ -22,9 +22,9 @@ let
       lists = lib.concatLists (lib.mapAttrsToList (name: value:
         let
           versionSets = lib.concatLists (lib.mapAttrsToList (name: value:
-            [ (redactedError value.canonicalPath) ] ++ map redactedError value.aliases
+            [ (redactedError value.path) ]# ++ map redactedError value.aliases
           ) value.versions);
-        in [ (redactedError [ value.callScopeAttr ]) ] ++ versionSets
+        in [ (redactedError [ value.callScopeAttr ]) ] ++ versionSets ++ map redactedError (map lib.singleton (lib.attrNames value.aliases))
       ) packageSets);
       result = mergeSets lists;
     in builtins.trace (toString (lib.attrNames result)) result;
@@ -81,8 +81,7 @@ let
 
   inherit (import ./memoizeFunctionParameters.nix { inherit lib; }) memoizeFunctionParameters;
 
-# libraryVersions of the form { python = "<full-version>"; perl = "<full-version>"; ... }
-in parentOverlays: parentArgs: myArgs: libraryVersions:
+in parentOverlays: parentArgs: myArgs: versionTrees:
 let
   # Merges attribute sets recursively, but not recursing into derivations,
   # and error if a derivation is overridden with a non-derivation, or the other way around
@@ -219,41 +218,39 @@ let
 
       funs = packageSetFuns setName spec.callScopeAttr;
 
-      versionOutput = version: paths:
+      versionOutput = version: versionInfo:
         let
 
-          packageSetScope = lib.getAttrFromPath paths.canonicalPath baseScope.original
+          packageSetScope = lib.getAttrFromPath versionInfo.path baseScope.original
             // {
               ${spec.callScopeAttr} = packageSetScope;
             };
 
-          output = path: {
+          output = {
             name = setName;
-            inherit path;
-            recurse = paths.recurse;
+            inherit (versionInfo) path;
+            recurse = versionInfo.recurse;
             deepOverride = spec.deepOverride;
             extraScope = packageSetScope;
             inherit funs;
             libraryVersions.${setName} = version;
           };
 
-          aliasOutput = path: {
-            name = setName;
-            inherit path;
-            aliasedPath = paths.canonicalPath;
-          };
 
-        in [ (output paths.canonicalPath) ] ++
-          map aliasOutput (lib.lists.remove [ spec.callScopeAttr ] paths.aliases);
+        in [ output ];
 
       results =
         lib.concatLists (lib.mapAttrsToList versionOutput spec.versions) ++ [
           {
             name = setName;
             path = [ spec.callScopeAttr ];
-            aliasedPath = spec.versions.${libraryVersions.${setName}}.canonicalPath;
+            aliasedPath = spec.versions.${versionTreeLib.queryDefault "" versionTrees.${setName}}.path;
           }
-        ];
+        ] ++ lib.mapAttrsToList (attr: prefix: {
+          name = setName;
+          path = [ attr ];
+          aliasedPath = spec.versions.${versionTreeLib.queryDefault prefix versionTrees.${setName}}.path;
+        }) spec.aliases;
 
     in lib.optionals (funs.deep != { } || funs.shallow != { }) results;
 
@@ -306,7 +303,7 @@ let
     lib.mapAttrs (pname: value:
       let
 
-        libraryVersions' = libraryVersions // spec.libraryVersions;
+        libraryVersions = lib.mapAttrs (name: versionTreeLib.queryDefault "") versionTrees // spec.libraryVersions;
 
         packageSetVersions = lib.mapAttrs (name: pvalue:
           if ! packageSets ? ${name} then
@@ -320,12 +317,8 @@ let
               Select either "app" or "lib"
             '')
           else {
-            app = pvalue.app.version or
-              (throw ''
-                In ${value.path}/config.nix, packageSets.${name}.type is set to "app", but no version was given.
-                Set one with packageSets.${name}.app.version. Available values are [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames packageSets.${name}.versions)} ]
-              '');
-            lib = libraryVersions'.${name};
+            app = versionTreeLib.queryDefault (pvalue.app.version or "") versionTrees.${name};
+            lib = libraryVersions.${name};
           }.${pvalue.type} or
           (throw ''
             In ${value.path}/config.nix, packageSets.${name}.type is specified to be "${pvalue.type}", which is not a valid value.
@@ -338,7 +331,7 @@ let
             let
               version = packageSetVersions.${name};
               setInfo = packageSets.${name};
-              canonicalPath = setInfo.versions.${version}.canonicalPath or
+              canonicalPath = setInfo.versions.${version}.path or
                 (throw "No version ${version} for ${name}, available ones are [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames setInfo.versions)} ]");
               canonicalSet = lib.getAttrFromPath canonicalPath original;
 
@@ -354,7 +347,7 @@ let
 
         channels =
           let
-            cased = lib.mapAttrs repopulate (channelOutputs libraryVersions');
+            cased = lib.mapAttrs repopulate (channelOutputs libraryVersions);
 
             lowercased =
               lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) cased;

@@ -193,7 +193,7 @@ in let
   };
 
   outputFun = import ./output.nix {
-    inherit outputFun channelArgs pkgs withVerbosity packageSets;
+    inherit outputFun channelArgs pkgs withVerbosity packageSets versionTreeLib;
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
   };
 
@@ -212,10 +212,16 @@ in let
     else acc
   ) defaultLibraryVersions (lib.attrNames defaultLibraryVersions);
 
-  libraryVersions = lib.mapAttrs (name: value: value.defaultVersion) packageSets // checkedDefaultVersions;
+  versionTrees = lib.mapAttrs (name: value:
+    if defaultLibraryVersions ? ${name}
+      then versionTreeLib.setDefault "" defaultLibraryVersions.${name} value.versionTree
+      else value.versionTree
+  ) packageSets;
+
+  versionTreeLib = (import ./defaultVersionTree.nix { inherit lib; }).library;
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = outputFun [ ] myChannelArgs myChannelArgs libraryVersions;
+  outputs = outputFun [ ] myChannelArgs myChannelArgs versionTrees;
   channelArguments = myChannelArgs;
 }.${_return}
