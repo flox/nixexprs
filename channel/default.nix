@@ -197,7 +197,22 @@ in let
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
   };
 
-  libraryVersions = lib.mapAttrs (name: value: value.defaultVersion) packageSets // defaultLibraryVersions;
+  checkedDefaultVersions = lib.foldl' (acc: pname:
+    let version = defaultLibraryVersions.${pname}; in
+    if ! packageSets ? ${pname} then
+      throw ''
+        In channel ${name}'s default.nix, defaultLibraryVersions specifies a version for package set ${pname}, which is not available.
+        Available package sets are ${lib.generators.toPretty { multiline = false; } (lib.attrNames packageSets)}
+      ''
+    else if ! packageSets.${pname}.versions ? ${version} then
+      throw ''
+        In channel ${name}'s default.nix, defaultLibraryVersions specifies version "${version}" for package set ${pname}, which is not available.
+        Available versions are ${lib.generators.toPretty { multiline = false; } (lib.attrNames packageSets.${pname}.versions)}
+      ''
+    else acc
+  ) defaultLibraryVersions (lib.attrNames defaultLibraryVersions);
+
+  libraryVersions = lib.mapAttrs (name: value: value.defaultVersion) packageSets // checkedDefaultVersions;
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
