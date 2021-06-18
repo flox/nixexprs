@@ -81,8 +81,13 @@ let
 
   inherit (import ./memoizeFunctionParameters.nix { inherit lib; }) memoizeFunctionParameters;
 
-in parentOverlays: parentArgs: myArgs: versionTrees:
+in parentOverlays: parentArgs: myArgs: libraryVersions:
 let
+
+  appVersionTrees = lib.mapAttrs (name: value:
+    versionTreeLib.setDefault "" (myArgs.defaultLibraryVersions.${name} or "") value.versionTree
+  ) packageSets;
+
   # Merges attribute sets recursively, but not recursing into derivations,
   # and error if a derivation is overridden with a non-derivation, or the other way around
   smartMerge = lib.recursiveUpdateUntil (path: l: r:
@@ -202,57 +207,78 @@ let
       shallow = parts.wrong;
     };
 
-  # TODO: What if you want to override e.g. pkgs.xorg.libX11. Make sure to recurse into attributes
-  toplevel = {
-    name = "toplevel";
-    recurse = true;
-    deepOverride = a: b: b;
-    path = [ ];
-    extraScope = { };
-    funs = packageSetFuns "toplevel" "pkgs";
-    libraryVersions = {};
-  };
+  toplevel =
+    let
+      funs = packageSetFuns "toplevel" "pkgs";
+    in {
+      deep = [{
+        name = "toplevel";
+        deepOverride = a: b: b;
+        path = [ ];
+        defaultPath = [ ];
+        extraScope = null;
+        funs = funs.deep;
+        libraryVersions = {};
+        defaultTypes = {};
+      }];
+      shallow = [{
+        # TODO: Nest extraScope, funs, path, libraryVersions under createSet attribute, to indicate that it's used by that function
+        name = "toplevel";
+        recurse = true;
+        path = [ ];
+        extraScope = null;
+        funs = funs.shallow;
+        libraryVersions = {};
+        defaultTypes = {};
+      }];
+    };
 
   packageSetOutputs = setName: spec:
     let
 
       funs = packageSetFuns setName spec.callScopeAttr;
 
-      versionOutput = version: versionInfo:
+      deepOutputs =
         let
-
-          packageSetScope = lib.getAttrFromPath versionInfo.path baseScope.original
-            // {
-              ${spec.callScopeAttr} = packageSetScope;
-            };
-
-          output = {
+          output = path: version: {
             name = setName;
-            inherit (versionInfo) path;
-            recurse = versionInfo.recurse;
+            inherit path;
+            defaultPath = [ spec.callScopeAttr ];
             deepOverride = spec.deepOverride;
-            extraScope = packageSetScope;
-            inherit funs;
+            extraScope = spec.callScopeAttr;
+            funs = funs.deep;
             libraryVersions.${setName} = version;
+            defaultTypes.${setName} = "lib";
           };
 
+          defaultOutput =
+            output [ spec.callScopeAttr ] (versionTreeLib.queryDefault "" packageSets.${setName}.versionTree);
 
-        in [ output ];
 
-      results =
-        lib.concatLists (lib.mapAttrsToList versionOutput spec.versions) ++ [
-          {
-            name = setName;
-            path = [ spec.callScopeAttr ];
-            aliasedPath = spec.versions.${versionTreeLib.queryDefault "" versionTrees.${setName}}.path;
-          }
-        ] ++ lib.mapAttrsToList (attr: prefix: {
-          name = setName;
-          path = [ attr ];
-          aliasedPath = spec.versions.${versionTreeLib.queryDefault prefix versionTrees.${setName}}.path;
-        }) spec.aliases;
+          aliasOutput = alias: aliasValue:
+            output [ alias ] (versionTreeLib.queryDefault aliasValue packageSets.${setName}.versionTree);
 
-    in lib.optionals (funs.deep != { } || funs.shallow != { }) results;
+          versionOutput = version: versionInfo:
+            output versionInfo.path version;
+
+        in [ defaultOutput ]
+          ++ lib.mapAttrsToList aliasOutput spec.aliases
+          ++ lib.mapAttrsToList versionOutput spec.versions;
+
+      shallowOutputs = [{
+        name = setName;
+        recurse = true;
+        path = [ spec.callScopeAttr ];
+        extraScope = spec.callScopeAttr;
+        funs = funs.shallow;
+        libraryVersions = {};
+        defaultTypes.${setName} = "lib";
+      }];
+
+    in {
+      deep = deepOutputs;
+      shallow = shallowOutputs;
+    };
 
   /* A list of entries describing an output set, each of the form
      {
@@ -266,15 +292,14 @@ let
      }
 
      or if it's an alias definition
+   */
 
-     {
-       name = <name for this output set>;
-       path = <attribute path where this set should end up in the channels result>;
-       aliasedPath = <the aliased path the above path should point to>;
-     }
-  */
-  outputSpecs = [ toplevel ]
-    ++ lib.concatLists (lib.mapAttrsToList packageSetOutputs packageSets);
+  # { deep = [ { ... } ... ]; shallow = [ { ... } ... ]; }
+  outputSpecs =
+    let
+      items = [ toplevel ]
+        ++ lib.mapAttrsToList packageSetOutputs packageSets;
+    in lib.zipAttrsWith (name: lib.concatLists) items;
 
   allPackageSetVersions = lib.mapAttrs (name: value: lib.attrNames value.versions) packageSets;
 
@@ -286,47 +311,20 @@ let
      of that channel. In turn however this allows deep overrides over the whole
      channel dependency tree.
 
-    { python, perl, haskell, erlang }: { <channel> = { original = <outputs>; redacted = <redacted outputs>; }; };
+    { python, perl, haskell, erlang }: {
+      pkgs = <pkgs>;
+      channels.<channel> = <outputs>;
+    };
   */
-  channelOutputs = memoizeFunctionParameters allPackageSetVersions (packageSetVersions:
-    lib.mapAttrs (name: args:
-      let original = outputFun myOverlays myArgs args packageSetVersions;
-      in {
-        inherit original;
-        redacted = lib.recursiveUpdate original redactingSet;
-      }
-    ) channelArgs
-  );
-
-
-  createSet = spec: super:
-    lib.mapAttrs (pname: value:
-      let
-
-        libraryVersions = lib.mapAttrs (name: versionTreeLib.queryDefault "") versionTrees // spec.libraryVersions;
-
-        packageSetVersions = lib.mapAttrs (name: pvalue:
-          if ! packageSets ? ${name} then
-            (throw ''
-              In ${value.path}/config.nix, packageSets.${name} was defined, but no such package set exists.
-              Existing ones are ${lib.concatStringsSep ", " (lib.attrNames packageSets)}
-            '')
-          else if ! pvalue ? type then
-            (throw ''
-              In ${value.path}/config.nix, packageSets.${name}.type is not specified
-              Select either "app" or "lib"
-            '')
-          else {
-            app = versionTreeLib.queryDefault (pvalue.app.version or "") versionTrees.${name};
-            lib = libraryVersions.${name};
-          }.${pvalue.type} or
-          (throw ''
-            In ${value.path}/config.nix, packageSets.${name}.type is specified to be "${pvalue.type}", which is not a valid value.
-            Select either "app" or "lib"
-          '')
-        ) (value.config.packageSets or {});
-
-        repopulate = channel: { original, redacted }:
+  versionSetSpecific =
+    let
+      original = pkgs.appendOverlays myOverlays;
+      # TODO: Make sure this throws the correct errors
+      redacted = lib.recursiveUpdate (lib.recursiveUpdate original redactingSet) toplevelRedactingSet;
+    in memoizeFunctionParameters allPackageSetVersions (packageSetVersions:
+      {
+        pkgs =
+          # TODO: If app, not only allow access from pythonPackages, but also python${major}Packages (aliases) and python${major}${minor}Packages (canonicalPath)
           lib.foldl' (set: name:
             let
               version = packageSetVersions.${name};
@@ -336,29 +334,53 @@ let
               canonicalSet = lib.getAttrFromPath canonicalPath original;
 
               withCallScopeAttr = updateAttrByPath [ setInfo.callScopeAttr ] canonicalSet set;
-              toplevelResult = withCallScopeAttr // setInfo.populateToplevel canonicalSet;
-              result = if channel == null then toplevelResult else withCallScopeAttr;
-              context = if channel == null then "toplevel scope" else "channel ${channel}";
+              result = withCallScopeAttr // setInfo.populateToplevel canonicalSet;
             in
-              builtins.seq version (builtins.trace "For ${context} for ${lib.concatStringsSep "." (spec.path ++ [ pname ])}, allowing access to ${lib.concatStringsSep "." canonicalPath} from ${setInfo.callScopeAttr}"
+              builtins.seq version (builtins.trace "Allowing access to ${lib.concatStringsSep "." canonicalPath} from ${setInfo.callScopeAttr}"
                 # Force early version resolution error
                 result)
           ) redacted (lib.attrNames packageSetVersions);
 
         channels =
           let
-            cased = lib.mapAttrs repopulate (channelOutputs libraryVersions);
+            cased = lib.mapAttrs (name: args:
+              outputFun myOverlays myArgs args packageSetVersions
+            ) channelArgs;
 
             lowercased =
               lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) cased;
           in cased // lowercased;
+      }
+    );
 
-        repopulatedBaseScope = repopulate null baseScope;
+  createSet = spec: super:
+    lib.mapAttrs (pname: value:
+      let
+
+        packageSetVersions = lib.mapAttrs (name: pvalue:
+          let
+            config = value.config.packageSets.${name} or {};
+            type = config.type or spec.defaultType.${name} or "app";
+            version = {
+              app = versionTreeLib.queryDefault (config.app.version or "") appVersionTrees.${name};
+              lib = spec.libraryVersions.${name} or libraryVersions.${name};
+            }.${type} or
+              (throw ''
+                In ${value.path}/config.nix, packageSets.${name}.type is specified to be "${config.type}", which is not a valid value.
+                Select either "app" or "lib"
+              '');
+          in version
+        ) packageSets;
+
+        inherit (lib.debug.traceSeq packageSetVersions versionSetSpecific packageSetVersions) pkgs channels;
+
+        # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
+        baseScope = smartMerge (pkgs // pkgs.xorg) channels.${myArgs.name};
+
+        extraScope = if spec.extraScope == null then {} else baseScope.${spec.extraScope};
 
         localMeta = meta // {
-          inherit channels;
-
-          inherit scope;
+          inherit channels scope;
 
           mapDirectory = dir:
             { call ? path: callPackage path { } }:
@@ -384,7 +406,7 @@ let
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
         # A callPackage abstraction that allows specifying multiple attribute sets might be nice
         createScope = isOwn:
-          repopulatedBaseScope // spec.extraScope // lib.optionalAttrs isOwn {
+          baseScope // extraScope // lib.optionalAttrs isOwn {
             ${pname} = super.${pname} or (throw
               "${pname} is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
           } // {
@@ -409,23 +431,26 @@ let
         } // ownCallPackage value.path { };
       in withVerbosity 8 (builtins.trace
         "[channel ${myArgs.name}] [packageSet ${spec.name}] Auto-calling package ${pname}")
-      ownOutput);
+      ownOutput) spec.funs;
+
+  # Construct a single pkgs for all library versions of a channel
+  # Should overlay all canonical package set paths
 
   # All the overlays that should be applied to the pkgs base set for this
   # channels evaluation (and all the channels it imports)
   myOverlays = let
 
-    deepSpecTrace = spec:
-      builtins.trace "[channel ${myArgs.name}] [path ${
-        lib.concatStringsSep "." spec.path
-      }] Deeply overriding attributes ${
-        toString (lib.attrNames spec.funs.deep)
-      }" spec;
+    #deepSpecTrace = spec:
+    #  builtins.trace "[channel ${myArgs.name}] [path ${
+    #    lib.concatStringsSep "." spec.path
+    #  }] Deeply overriding attributes ${
+    #    toString (lib.attrNames spec.funs.deep)
+    #  }" spec;
 
     # Only the output sets that need a deep override
     # We do this so we can avoid having to add an overlay if not necessary
-    deepOutputSpecs = withVerbosity 6 (map deepSpecTrace)
-      (lib.filter (o: o.funs.deep or { } != { }) outputSpecs);
+    #deepOutputSpecs = withVerbosity 6 (map deepSpecTrace)
+    #  (lib.filter (o: o.funs.deep or { } != { }) outputSpecs);
 
     deepOverlay = self: super:
       let
@@ -434,20 +459,16 @@ let
             withVerbosity 5 (builtins.trace "[channel ${myArgs.name}] [path ${
                 lib.concatStringsSep "." spec.path
               }] Creating overriding package set") spec.deepOverride superSet
-            (createSet spec superSet spec.funs.deep));
-      in mergeSets (map deepOverlaySet deepOutputSpecs);
+            (createSet spec superSet));
+      in mergeSets (map deepOverlaySet outputSpecs.deep);
 
     # See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#channel-dependencies for why this order seems to be reversed
-  in lib.optional (deepOutputSpecs != [ ]) deepOverlay ++ myArgs.extraOverlays
-  ++ parentOverlays;
+  in lib.optional (lib.any (x: x.funs != {}) outputSpecs.deep) deepOverlay ++ myArgs.extraOverlays
+    ++ parentOverlays;
 
-  # The resulting pkgs set of this channel, needed for the function arguments of
-  # this channels packages, and for extracting outputs that were deeply overridden
-  myPkgs = pkgs.appendOverlays myOverlays;
-
-  outputSet = spec:
+  shallowOutputSet = spec:
     let
-      packageSet = lib.getAttrFromPath spec.path myPkgs;
+      packageSet = lib.getAttrFromPath spec.path (versionSetSpecific libraryVersions).pkgs;
 
       outputTrace = source:
         lib.mapAttrs (name:
@@ -456,24 +477,43 @@ let
           }] Output attribute ${name} comes from ${source}");
 
       shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
-        (createSet spec packageSet spec.funs.shallow);
+        (createSet spec packageSet);
+
+      canonicalResult = hydraSetAttrByPath spec.recurse spec.path
+        (shallowOutputs /*// deepOutputs*/);
+
+      #aliasedResult = hydraSetAttrByPath false spec.path
+      #  (lib.getAttrFromPath spec.aliasedPath outputs);
+
+    in canonicalResult;#if spec ? aliasedPath then aliasedResult else canonicalResult;
+
+  deepOutputSet = spec:
+    let
+      packageSet = lib.getAttrFromPath spec.defaultPath (versionSetSpecific libraryVersions).pkgs;
+
+      outputTrace = source:
+        lib.mapAttrs (name:
+          builtins.trace "[channel ${myArgs.name}] [path ${
+            lib.concatStringsSep "." spec.path
+          }] Output attribute ${name} comes from ${source}");
+
 
       # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
       deepOutputs = withVerbosity 7 (outputTrace "deep override")
-        (builtins.intersectAttrs spec.funs.deep packageSet);
+        (builtins.intersectAttrs spec.funs packageSet);
 
-      canonicalResult = hydraSetAttrByPath spec.recurse spec.path
-        (shallowOutputs // deepOutputs);
+    in deepOutputs;
 
-      aliasedResult = hydraSetAttrByPath false spec.path
-        (lib.getAttrFromPath spec.aliasedPath outputs);
-
-    in if spec ? aliasedPath then aliasedResult else canonicalResult;
-
-  outputs = withVerbosity 6 (builtins.trace "Got output spec paths: ${
-      lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path)
-      outputSpecs
-    }") (mergeSets (map outputSet outputSpecs));
+  outputs =
+    let
+      message = "Got output spec paths: ${
+        lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path)
+        outputSpecs
+      }";
+      shallowOutputs = map shallowOutputSet (lib.filter (x: x.funs != {}) outputSpecs.shallow);
+      deepOutputs = map deepOutputSet (lib.filter (x: x.funs != {}) outputSpecs.deep);
+      result = mergeSets (deepOutputs ++ shallowOutputs);
+    in withVerbosity 6 (builtins.trace message) result;
 
   meta = rec {
     getChannelSource =
@@ -488,14 +528,6 @@ let
     inherit withVerbosity;
   };
 
-  baseScope =
-    # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
-    let original = smartMerge (myPkgs // myPkgs.xorg) outputs;
-    in {
-      inherit original;
-      # TODO: Make sure this throws the correct errors
-      redacted = lib.recursiveUpdate (lib.recursiveUpdate original redactingSet) toplevelRedactingSet;
-    };
 
 in withVerbosity 3 (builtins.trace
   ("[channel ${myArgs.name}] Evaluating, being imported from ${parentArgs.name}"))

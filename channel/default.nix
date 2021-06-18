@@ -114,7 +114,7 @@ in let
     "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}")
   firstSuccess.success;
 
-  myChannelArgs = { inherit name topdir extraOverlays args; };
+  myChannelArgs = { inherit name topdir extraOverlays defaultLibraryVersions args; };
 
   # List of { name, path, value } entries of channels found in NIX_PATH
   # Searches through both prefixed and non-prefixed paths in NIX_PATH
@@ -197,31 +197,14 @@ in let
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
   };
 
-  checkedDefaultVersions = lib.foldl' (acc: pname:
-    let version = defaultLibraryVersions.${pname}; in
-    if ! packageSets ? ${pname} then
-      throw ''
-        In channel ${name}'s default.nix, defaultLibraryVersions specifies a version for package set ${pname}, which is not available.
-        Available package sets are ${lib.generators.toPretty { multiline = false; } (lib.attrNames packageSets)}
-      ''
-    else if ! packageSets.${pname}.versions ? ${version} then
-      throw ''
-        In channel ${name}'s default.nix, defaultLibraryVersions specifies version "${version}" for package set ${pname}, which is not available.
-        Available versions are ${lib.generators.toPretty { multiline = false; } (lib.attrNames packageSets.${pname}.versions)}
-      ''
-    else acc
-  ) defaultLibraryVersions (lib.attrNames defaultLibraryVersions);
-
-  versionTrees = lib.mapAttrs (name: value:
-    if defaultLibraryVersions ? ${name}
-      then versionTreeLib.setDefault "" defaultLibraryVersions.${name} value.versionTree
-      else value.versionTree
+  libraryVersions = lib.mapAttrs (name: value:
+    versionTreeLib.queryDefault (defaultLibraryVersions.${name} or "") value.versionTree
   ) packageSets;
 
   versionTreeLib = (import ./defaultVersionTree.nix { inherit lib; }).library;
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = outputFun [ ] myChannelArgs myChannelArgs versionTrees;
+  outputs = outputFun [ ] myChannelArgs myChannelArgs libraryVersions;
   channelArguments = myChannelArgs;
 }.${_return}
