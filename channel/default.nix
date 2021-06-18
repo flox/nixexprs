@@ -136,7 +136,7 @@ in let
 
     pathEntries = lib.concatMap expandEntry builtins.nixPath;
     exprEntries = map (e: e // { value = import e.path; })
-      (lib.filter (e: builtins.pathExists (e.path + "/default.nix"))
+      (lib.filter (e: lib.hasPrefix "/" e.path && builtins.pathExists (e.path + "/default.nix"))
         pathEntries);
     channelEntries = lib.filter (e:
       let
