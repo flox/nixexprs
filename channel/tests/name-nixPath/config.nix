@@ -11,8 +11,8 @@
       path = repo;
     }
     {
-      prefix = "test";
-      path = ./channels/test;
+      prefix = "";
+      path = ./channels;
     }
   ];
 }

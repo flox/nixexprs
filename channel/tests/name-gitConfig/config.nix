@@ -25,5 +25,9 @@ in {
       prefix = "flox";
       path = repo;
     }
+    {
+      prefix = "";
+      path = ./channels;
+    }
   ];
 }
