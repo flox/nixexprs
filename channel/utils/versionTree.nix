@@ -107,6 +107,13 @@ let
           if ! tree.versions ? ${head} then throw "Version prefix \"${lib.concatStringsSep "." newPath}\" doesn't exist"
           else go newPath (lib.tail prefix) tree.versions.${head};
     in go [];
+
+    hasPrefix = prefix: tree:
+      if prefix == [] then true
+      else if tree == null then false
+      else tree.versions ? ${lib.head prefix}
+        && core.hasPrefix (lib.tail prefix) tree.versions.${lib.head prefix};
+
   };
 
   library = {
@@ -146,6 +153,8 @@ let
         aList = lib.versions.splitVersion a;
         bList = lib.versions.splitVersion b;
       in lib.take (lib.length aList) bList == aList;
+
+    hasPrefix = prefix: tree: core.hasPrefix (lib.versions.splitVersion prefix) tree;
 
   };
 

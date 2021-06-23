@@ -17,7 +17,7 @@ let
   # This is used to determine whether nixpkgs hydra builds certain package sets
   releasePkgs = import (nixpkgs' + "/pkgs/top-level/release.nix") { };
 
-  versionTreeLib = (import ./defaultVersionTree.nix { inherit lib; }).library;
+  utils = import ./utils { inherit lib; };
 
   withMatchedAttrs = path: regex: fun: lib.pipe (lib.getAttrFromPath path pkgs) [
     (lib.mapAttrsToList (name: value: {
@@ -66,31 +66,46 @@ let
     }
   */
   packageSet = setName:
-    { callScopeAttr, versionForPackageSet, attrPathForVersion, packageSetAttrPaths, extraNixpkgsAttrPaths, deepOverride }:
+    { callScopeAttr, versionForPackageSet, attrPathForVersion, attrPaths, deepOverride }:
     let
 
       output = {
         inherit callScopeAttr deepOverride;
       };
 
-      allVersions = lib.unique (map (el:
-        versionForPackageSet (lib.getAttrFromPath el.path pkgs)
-      ) packageSetAttrPaths);
+      splitAttrPaths = lib.partition (el: el.valueAttrPath == []) attrPaths;
 
-      pregenOutput.versions = lib.genAttrs allVersions attrPathForVersion;
+      processed = lib.pipe splitAttrPaths.right [
+        (map (el: el // {
+          version = versionForPackageSet (lib.getAttrFromPath el.path pkgs);
+          recurse = lib.attrByPath el.path { } releasePkgs != { };
+        }))
+        (lib.groupBy (el: el.version))
+        (lib.mapAttrs (version:
+          lib.partition (el: el.path == attrPathForVersion version)
+        ))
+        (lib.filterAttrs (version: split: split.right != []))
+        (lib.mapAttrs (version: split: {
+          aliases = split.wrong;
+          canonical = lib.head split.right;
+        }))
+      ];
 
-      pregenOutput.packageSetAttrPaths = map (el: el // {
-        recurse = lib.attrByPath el.path { } releasePkgs != { };
-      }) packageSetAttrPaths;
+      pregenOutput.versions = lib.mapAttrs (name: value: value.canonical.path) processed;
 
-      pregenOutput.extraNixpkgsAttrPaths = extraNixpkgsAttrPaths;
+      packageAttrPaths = map (el: removeAttrs el [ "version" ]) (lib.concatLists (lib.mapAttrsToList (version: { aliases, canonical }: [ canonical ] ++ aliases) processed));
+      nonPackageAttrPaths = lib.filter (el: utils.versionTreeLib.core.hasPrefix el.versionPrefix pregenOutput.versionTree) splitAttrPaths.wrong;
+
+      pregenOutput.attrPaths = packageAttrPaths ++ nonPackageAttrPaths;
 
       pregenOutput.versionTree =
         let
-          baseTree = versionTreeLib.insertMultiple allVersions versionTreeLib.empty;
-          final = lib.foldl' (acc: el:
-            versionTreeLib.setDefault (lib.concatStringsSep "." el.versionPrefix) (versionForPackageSet (lib.getAttrFromPath el.path pkgs)) acc
-          ) baseTree packageSetAttrPaths;
+          baseTree = utils.versionTreeLib.library.insertMultiple (lib.attrNames processed) utils.versionTreeLib.library.empty;
+          final = lib.foldl' (acc: version:
+            lib.foldl' (acc: el:
+              utils.versionTreeLib.library.setDefault (lib.concatStringsSep "." el.versionPrefix) el.version acc
+            ) acc processed.${version}.aliases
+          ) baseTree (lib.attrNames processed);
         in final;
 
       #pregenAttrs = map (x: removeAttrs x [ "value" ]) nixpkgsAttrs;
@@ -129,34 +144,34 @@ in lib.mapAttrs packageSet {
           "ghc${lib.elemAt parts 0}${lib.elemAt parts 1}${lib.elemAt parts 2}";
       in [ "haskell" "packages" attribute ];
 
-    packageSetAttrPaths = let
-      packages = withMatchedAttrs [ "haskell" "packages" ] "ghc([0-9]+)" (el: {
-        inherit (el) path;
-        versionPrefix =
-          let
-            versionList = lib.versions.splitVersion el.value.ghc.version;
-            go = list: if lib.hasPrefix (lib.concatStrings list) (lib.head el.matched) then list else go (lib.init list);
-          in go versionList;
-      });
-    in packages;
+    attrPaths =
+      let
+        longestPrefix = list: match: if lib.hasPrefix (lib.concatStrings list) match then list else longestPrefix (lib.init list) match;
 
-    extraNixpkgsAttrPaths = let
-      compilers = withMatchedAttrs [ "haskell" "compiler" ] "ghc([0-9]+)" (el: {
-        inherit (el) path;
-        versionPrefix =
-          let
-            versionList = lib.versions.splitVersion el.value.version;
-            go = list: if lib.hasPrefix (lib.concatStrings list) (lib.head el.matched) then list else go (lib.init list);
-          in go versionList;
-        valueAttrPath = [ "ghc" ];
-      });
-    in compilers ++ [
-      {
-        path = [ "ghc" ];
-        versionPrefix = [ ];
-        valueAttrPath = [ "ghc" ];
-      }
-    ];
+        packageSets = withMatchedAttrs [ "haskell" "packages" ] "ghc([0-9]+)" (el: {
+          inherit (el) path;
+          versionPrefix = longestPrefix (lib.versions.splitVersion el.value.ghc.version) (lib.head el.matched);
+          valueAttrPath = [];
+        });
+
+        compilers = withMatchedAttrs [ "haskell" "compiler" ] "ghc([0-9]+)" (el: {
+          inherit (el) path;
+          versionPrefix = longestPrefix (lib.versions.splitVersion el.value.version) (lib.head el.matched);
+          valueAttrPath = [ "ghc" ];
+        });
+
+      in packageSets ++ compilers ++ [
+        {
+          path = [ "haskellPackages" ];
+          versionPrefix = [ ];
+          valueAttrPath = [ ];
+        }
+        {
+          path = [ "ghc" ];
+          versionPrefix = [ ];
+          valueAttrPath = [ "ghc" ];
+        }
+      ];
 
     deepOverride = set: overrides:
       set.override (old: {
@@ -178,18 +193,14 @@ in lib.mapAttrs packageSet {
         attribute = "erlangR${lib.elemAt parts 0}";
       in [ "beam" "packages" attribute ];
 
-    packageSetAttrPaths =
+    attrPaths =
       let
-        packages = withMatchedAttrs [ "beam" "packages" ] "erlangR([0-9]+)" (el: {
+        packageSets = withMatchedAttrs [ "beam" "packages" ] "erlangR([0-9]+)" (el: {
           inherit (el) path;
           versionPrefix = [ (lib.head el.matched) ];
+          valueAttrPath = [];
         });
-      in packages ++ [
-        { path = [ "beam" "packages" "erlang" ]; versionPrefix = []; }
-      ];
 
-    extraNixpkgsAttrPaths =
-      let
         interpreters = lib.concatLists (withMatchedAttrs [ "beam" "interpreters" ] "erlangR([0-9]+)" (el: [
           {
             inherit (el) path;
@@ -202,8 +213,9 @@ in lib.mapAttrs packageSet {
             valueAttrPath = [ "erlang" ];
           }
         ]));
-
-      in interpreters ++ [
+      in packageSets ++ interpreters ++ [
+        { path = [ "beamPackages" ]; versionPrefix = []; valueAttrPath = []; }
+        { path = [ "beam" "packages" "erlang" ]; versionPrefix = []; valueAttrPath = []; }
         { path = [ "beam" "interpreters" "erlang" ]; versionPrefix = [ ]; valueAttrPath = [ "erlang" ]; }
         { path = [ "erlang" ]; versionPrefix = [ ]; valueAttrPath = [ "erlang" ]; }
         { path = [ "rebar" ]; versionPrefix = [ ]; valueAttrPath = [ "rebar" ]; }
@@ -226,12 +238,11 @@ in lib.mapAttrs packageSet {
         attribute = "python${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
       in [ attribute ];
 
-    packageSetAttrPaths = withMatchedAttrs [] "python([0-9])([0-9]+?)Packages" (el: {
+    attrPaths = withMatchedAttrs [] "python([0-9]?)([0-9]+?)Packages" (el: {
       inherit (el) path;
       versionPrefix = lib.filter (match: match != "") el.matched;
-    });
-
-    extraNixpkgsAttrPaths = withMatchedAttrs [] "python([0-9]?)([0-9]+?)" (el: {
+      valueAttrPath = [];
+    }) ++ withMatchedAttrs [] "python([0-9]?)([0-9]+?)" (el: {
       inherit (el) path;
       versionPrefix = lib.filter (match: match != "") el.matched;
       valueAttrPath = [ "python" ];
@@ -257,12 +268,11 @@ in lib.mapAttrs packageSet {
         attribute = "perl${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
       in [ attribute ];
 
-    packageSetAttrPaths = withMatchedAttrs [] "perl([0-9])([0-9]+)Packages" (el: {
+    attrPaths = withMatchedAttrs [] "perl([0-9]?)([0-9]+?)Packages" (el: {
       inherit (el) path;
       versionPrefix = lib.filter (match: match != "") el.matched;
-    });
-
-    extraNixpkgsAttrPaths = withMatchedAttrs [] "perl([0-9]?)([0-9]+?)" (el: {
+      valueAttrPath = [];
+    }) ++ withMatchedAttrs [] "perl([0-9]?)([0-9]+?)" (el: {
       inherit (el) path;
       versionPrefix = lib.filter (match: match != "") el.matched;
       valueAttrPath = [ "perl" ];

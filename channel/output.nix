@@ -44,7 +44,7 @@ in parentOverlays: parentArgs: myArgs:
 let
 
   appVersionTrees = lib.mapAttrs (name: value:
-    utils.versionTreeLib.setDefault "" (myArgs.defaultLibraryVersions.${name} or "") value.versionTree
+    utils.versionTreeLib.library.setDefault "" (myArgs.defaultLibraryVersions.${name} or "") value.versionTree
   ) packageSets;
 
   /* Imports all directories and Nix files of the given package directory subpath. Returns
@@ -108,21 +108,18 @@ let
 
       deepOutputs =
         let
-          output = el: {
+          output = el: lib.optional (el.valueAttrPath == []) {
             name = setName;
             inherit (el) path;
             defaultPath = [ spec.callScopeAttr ];
             deepOverride = spec.deepOverride;
             extraScope = spec.callScopeAttr;
             funs = funs.deep;
-            libraryVersions.${setName} = utils.versionTreeLib.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
+            libraryVersions.${setName} = utils.versionTreeLib.library.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
             defaultTypes.${setName} = "lib";
           };
 
-        in map output spec.packageSetAttrPaths ++ [ (output {
-          path = [ spec.callScopeAttr ];
-          versionPrefix = [];
-        }) ];
+        in lib.concatMap output spec.attrPaths;
 
       shallowOutputs = [{
         name = setName;
@@ -235,8 +232,7 @@ let
           };
 
           redactingList = lib.concatLists (lib.mapAttrsToList (name: pvalue:
-            map result pvalue.packageSetAttrPaths
-            ++ map result pvalue.extraNixpkgsAttrPaths
+            map result pvalue.attrPaths
             ++ [{
               path = [ pvalue.callScopeAttr ];
               value = lib.getAttrFromPath pvalue.versions.${libraryVersions.${name}} original;
@@ -266,7 +262,7 @@ let
                 type = config.type or spec.defaultType.${name} or "app";
                 version = {
                   app = {
-                    app.version = utils.versionTreeLib.queryDefault (config.app.version or "") appVersionTrees.${name};
+                    app.version = utils.versionTreeLib.library.queryDefault (config.app.version or "") appVersionTrees.${name};
                   };
                   lib = {};
                 }.${type} or
@@ -284,88 +280,11 @@ let
               }.${pvalue.type}
             ) defaultedConfig;
 
-            #rep = accessPath: let base = lib.getAttrFromPath accessPath localVersions; in lib.foldl' (acc: el: updateAttrByPath el.path el.value acc) base (repopulate (path: set: versionPrefix:
-            #  let callScopeAttr = packageSets.${set}.callScopeAttr; in
-            #  if defaultedConfig.${set}.type == "app" then
-            #    if versionTreeLib.isVersionPrefixOf versionPrefix packageSetVersions.${set}
-            #    then base.${callScopeAttr}
-            #    else
-            #      let
-            #        alternateVersions = packageSetVersions // {
-            #          ${set} = versionTreeLib.queryDefault versionPrefix appVersionTrees.${set};
-            #        };
-            #      in lib.warn "In ${value.path}, the attribute ${lib.concatStringsSep "." path} is used when it shouldn't. To use ${set} version ${versionPrefix}, set packageSets.${set}.app.version = \"${versionPrefix}\""
-            #        (lib.getAttrFromPath accessPath (versionSetSpecific alternateVersions)).${callScopeAttr}
-            #  else throw "In ${value.path}, the attribute ${lib.concatStringsSep "." path} is used, which is not allowed. Libraries should use the generic ${callScopeAttr} instead"
-            #));
-
-            #baseScope = lib.foldl' (acc: name:
-            #  let pvalue = packageSets.${name}; version = packageSetVersions.${name}; in
-            #  lib.foldl' (acc: el:
-            #    let
-            #      result =
-            #        if defaultedConfig.${name}.type == "app" then
-            #          if versionTreeLib.isVersionPrefixOf el.versionPrefix version
-            #          then localVersions.baseScope.${pvalue.callScopeAttr}
-            #          else
-            #            let
-            #              alternateVersions = packageSetVersions // {
-            #                ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
-            #              };
-            #            in lib.warn "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't. To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = \"${el.versionPrefix}\""
-            #              (versionSetSpecific alternateVersions).baseScope.${pvalue.callScopeAttr}
-            #        else throw "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed. Libraries should use the generic ${pvalue.callScopeAttr} instead";
-            #    in updateAttrByPath el.path result acc
-            #  ) acc pvalue.packageSetAttrPaths
-            #) localVersions.baseScope (lib.attrNames packageSets);
-
-            #appRedact = file: name: el:
-            #  if versionTreeLib.isVersionPrefixOf el.versionPrefix version
-            #  then utils.getListAttr packageSets.${name}.callScopeAttr localVersions.baseScopeList
-            #  else
-            #    let
-            #      alternateVersions = packageSetVersions // {
-            #        ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
-            #      };
-            #      result = utils.getListAttr packageSets.${name}.callScopeAttr (versionSetSpecific alternateVersions).baseScopeList;
-            #      warning = ''
-            #        In ${file}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
-            #        To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = "${el.versionPrefix}"
-            #      '';
-            #    in lib.warn warning result;
-
-            #redactingAttrs = utils.nestedListToAttrs (lib.concatLists (lib.mapAttrsToList (name: pvalue:
-            #  map (el: {
-            #    path = el.path;
-            #    value = if isApp then appRedact value.path name el else null;
-            #  }) pvalue.packageSetAttrPaths
-            #  ++
-            #  map (el: {
-            #    path = el.path;
-            #    value =
-            #      if defaultedConfig.${name}.type == "app" then
-            #        if versionTreeLib.isVersionPrefixOf el.versionPrefix version
-            #        then utils.getListAttr pvalue.callScopeAttr localVersions.baseScopeList
-            #        else
-            #          let
-            #            alternateVersions = packageSetVersions // {
-            #              ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
-            #            };
-            #          in lib.warn "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't. To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = \"${el.versionPrefix}\""
-            #            utils.getListAttr pvalue.callScopeAttr (versionSetSpecific alternateVersions).baseScopeList
-            #      else throw "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed. Libraries should use the generic ${pvalue.callScopeAttr} instead";
-            #  }) pvalue.extraNixpkgsAttrPaths
-            #) packageSets));
-            #toplevelRedactingSet = utils.nestedListToAttrs null;
-
-            # TODO: Redact
             channels = lib.mapAttrs (channel: channelValue:
-              channelValue.outputs
+              utils.attrs.updateAttrByPaths (redactingList [ "channels" channel "outputs" ]) channelValue.outputs
             ) localVersions.channels;
 
             localVersions = versionSetSpecific packageSetVersions;
-
-            #extraScope = if spec.extraScope == null then {} else baseScope.${spec.extraScope};
 
             localMeta = meta // {
               inherit channels;
@@ -410,46 +329,44 @@ let
                 inherit callPackage;
               }];
 
-            redactingSet = lib.mapAttrs (name: values:
-              utils.attrs.updateAttrByPaths values (localVersions.baseScope.${name} or {})
-            ) (lib.groupBy (x: x.toplevel) redactingList);
-
-            redactingList = lib.concatLists (lib.mapAttrsToList (name: pvalue:
+            redact = selfAttr: name: el:
               let
-                version = packageSetVersions.${name};
-                forApp = suffix: el:
-                  if utils.versionTreeLib.isVersionPrefixOf el.versionPrefix version
-                  then lib.warn "Shouldn't access non-pythonPackages atributes" (lib.getAttrFromPath suffix localVersions.baseScope.${pvalue.callScopeAttr})
-                  else
-                    let
-                      alternateVersions = packageSetVersions // {
-                        ${name} = utils.versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
-                      };
-                      warning = ''
-                        In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
-                        To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = "${el.versionPrefix}"
-                      '';
-                      result = lib.getAttrFromPath suffix (versionSetSpecific alternateVersions).baseScope.${pvalue.callScopeAttr};
-                    in lib.warn warning result;
+                callScopeAttr = packageSets.${name}.callScopeAttr;
+                passthru = lib.getAttrFromPath (selfAttr ++ [ callScopeAttr ] ++ el.valueAttrPath) localVersions;
+                stringVersionPrefix = lib.concatStringsSep "." el.versionPrefix;
+                genericPath = lib.optional (el.valueAttrPath != [] && spec.extraScope != callScopeAttr) callScopeAttr ++ el.valueAttrPath;
 
-                forLib = suffix: el:
-                  if el.versionPrefix == []
-                  then lib.getAttrFromPath suffix localVersions.baseScope.${pvalue.callScopeAttr}
-                  else
-                    throw ''
-                      In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed.
-                      Libraries should use the generic ${lib.concatStringsSep "." (lib.optional (suffix != [] && spec.extraScope != pvalue.callScopeAttr) pvalue.callScopeAttr ++ suffix)} instead
-                    '';
+                alternateAppVersions = versionSetSpecific (packageSetVersions // {
+                  ${name} = utils.versionTreeLib.core.queryDefault el.versionPrefix appVersionTrees.${name};
+                });
+                alternate = lib.getAttrFromPath (selfAttr ++ [ callScopeAttr ] ++ el.valueAttrPath) alternateAppVersions;
+              in
+              if el.versionPrefix == [] then
+                passthru
+              else if defaultedConfig.${name}.type != "app" then
+                throw ''
+                  In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed.
+                  Libraries should use the generic ${lib.concatStringsSep "." genericPath} instead''
+              else if utils.versionTreeLib.library.isVersionPrefixOf stringVersionPrefix packageSetVersions.${name} then
+                lib.warn ''
+                  In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is accessed, which is specific to version ${stringVersionPrefix} of ${name}.
+                  It should be preferred to use ${lib.concatStringsSep "." genericPath} instead''
+                  passthru
+              else
+                lib.warn ''
+                  In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
+                  to use ${name} version ${stringVersionPrefix}, set packagesets.${name}.app.version = "${stringVersionPrefix}"'' alternate;
 
-                forAny = if defaultedConfig.${name}.type == "app" then forApp else forLib;
-                result = suffix: el: {
-                  toplevel = lib.head el.path;
-                  path = lib.tail el.path;
-                  value = forAny suffix el;
-                };
-              in map (result []) pvalue.packageSetAttrPaths
-              ++ map (el: result el.valueAttrPath el) pvalue.extraNixpkgsAttrPaths
-            ) packageSets);
+            redactingList = selfAttr: lib.concatMap (name:
+              map (el: {
+                path = el.path;
+                value = redact selfAttr name el;
+              }) packageSets.${name}.attrPaths
+            ) (lib.attrNames packageSets);
+
+            redactingSet = lib.mapAttrs (name: values:
+              utils.attrs.updateAttrByPaths (map (el: el // { path = lib.tail el.path; }) values) (localVersions.baseScope.${name} or {})
+            ) (lib.groupBy (x: lib.head x.path) (redactingList [ "baseScope" ]));
 
             ownCallPackage = utils.scopeList.callPackageWith (createScopes true);
 
@@ -508,9 +425,9 @@ let
 
             in deepOutputs;
 
-          message = "Got output spec paths: ${
+          message = "Got shallow output spec paths: ${
             lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path)
-            outputSpecs
+            outputSpecs.shallow
           }";
           shallowOutputs = map shallowOutputSet (lib.filter (x: x.funs != {}) outputSpecs.shallow);
           deepOutputs = map deepOutputSet (lib.filter (x: x.funs != {}) outputSpecs.deep);

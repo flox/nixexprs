@@ -198,7 +198,7 @@ in let
   };
 
   libraryVersions = lib.mapAttrs (name: value:
-    utils.versionTreeLib.queryDefault (defaultLibraryVersions.${name} or "") value.versionTree
+    utils.versionTreeLib.library.queryDefault (defaultLibraryVersions.${name} or "") value.versionTree
   ) packageSets;
 
   utils = import ./utils { inherit lib; };
