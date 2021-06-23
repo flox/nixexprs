@@ -141,13 +141,19 @@ let
 
     queryDefault = prefix: tree: lib.concatStringsSep "." (core.queryDefault (lib.versions.splitVersion prefix) tree);
 
+    isVersionPrefixOf = a: b:
+      let
+        aList = lib.versions.splitVersion a;
+        bList = lib.versions.splitVersion b;
+      in lib.take (lib.length aList) bList == aList;
+
   };
 
 
   test =
     let
       testVersions = [ "8.6.5" "8.8.2" "8.8.3" "8.8.4" "8.10.1" "8.10.2" "9.0.0" ];
-    in library.queryDefault "9" (library.setDefault "8.6" (library.setDefault "8.6.5" (library.setDefaultFull "8.8.4" (library.insertMultiple testVersions library.empty))));
+    in library.setDefault "" "" (library.insertMultiple testVersions library.empty);
 
 in {
   inherit core library test;

@@ -5,81 +5,40 @@ let
   inherit (pkgs) lib;
 
   # TODO: Better error
-  redactedError = path: lib.setAttrByPath path (throw "Tried to access redacted path ${lib.concatStringsSep "." path}");
+  #redactedError = path: lib.setAttrByPath path (throw "Tried to access redacted path ${lib.concatStringsSep "." path}");
 
   /*
   Redacting:
-  - For channels and toplevel, for all package sets and all versions, remove their canonicalPath's and aliasedPath's, and the package sets callScopeAttr
+  - For toplevel, for all package sets and all versions, remove their canonicalPath's and aliasedPath's, and the package sets callScopeAttr
   - For toplevel additionally remove all toplevelBlacklist's
 
   Repopulating:
   - For all allowed package sets,
-    - For toplevel and channels, set callScopeAttr to the set
+    - For toplevel, set callScopeAttr to the set
     - For toplevel, also use populateToplevel
   */
-  redactingSet =
-    let
-      lists = lib.concatLists (lib.mapAttrsToList (name: value:
-        let
-          versionSets = lib.concatLists (lib.mapAttrsToList (name: value:
-            [ (redactedError value.path) ]# ++ map redactedError value.aliases
-          ) value.versions);
-        in [ (redactedError [ value.callScopeAttr ]) ] ++ versionSets ++ map redactedError (map lib.singleton (lib.attrNames value.aliases))
-      ) packageSets);
-      result = mergeSets lists;
-    in builtins.trace (toString (lib.attrNames result)) result;
+  #redactingSet =
+  #  let
+  #    lists = lib.concatLists (lib.mapAttrsToList (name: value:
+  #      let
+  #        versionSets = lib.concatLists (lib.mapAttrsToList (name: value:
+  #          [ (redactedError value.path) ]# ++ map redactedError value.aliases
+  #        ) value.versions);
+  #      in [ (redactedError [ value.callScopeAttr ]) ] ++ versionSets ++ map redactedError (map lib.singleton (lib.attrNames value.aliases))
+  #    ) packageSets);
+  #    result = mergeSets lists;
+  #  in builtins.trace (toString (lib.attrNames result)) result;
 
-  toplevelRedactingSet =
-    let
-      lists = lib.concatLists (lib.mapAttrsToList (name: value:
-        map redactedError value.toplevelBlacklist
-      ) packageSets);
-      result = mergeSets lists;
-    in builtins.trace (toString (lib.attrNames result)) result;
+  #toplevelRedactingSet =
+  #  let
+  #    lists = lib.concatLists (lib.mapAttrsToList (name: value:
+  #      map redactedError value.toplevelBlacklist
+  #    ) packageSets);
+  #    result = mergeSets lists;
+  #  in builtins.trace (toString (lib.attrNames result)) result;
 
   # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though
   mergeSets = lib.foldl' lib.recursiveUpdate { };
-
-  /* Sets a value at a specific attribute path, while merging the attributes along that path with the ones from super, suitable for overlays.
-
-     Note: Because overlays implicitly use `super //` on the attributes, we don't want to have `super //` on the toplevel. We also don't want `super.<path> // <value>` on the lowest level, as we want to override the attribute path completely.
-
-     Examples:
-       overlaySet super [] value == value
-       overlaySet super [ "foo" ] value == { foo = value; }
-       overlaySet super [ "foo" "bar" ] value == { foo = super.foo // { bar = value; }; }
-  */
-  overlaySet = super: path: valueMod:
-    let
-      subname = lib.head path;
-      subsuper = super.${subname};
-      subvalue = subsuper // overlaySet subsuper (lib.tail path) valueMod;
-    in if path == [ ] then valueMod super else { ${subname} = subvalue; };
-
-  /* Same as setAttrByPath, except that lib.recurseIntoAttrs is applied to each path element, such that hydra recurses into the given value
-
-     Examples:
-       hydraSetAttrByPath recurse [] value = value
-       hydraSetAttrByPath recurse [ "foo" ] value = { foo = value // { recurseIntoAttrs = true; }; }
-       hydraSetAttrByPath recurse [ "foo" "bar" ] value = { foo = { recurseIntoAttrs = true; bar = value // { recurseIntoAttrs = true; }; }; }
-  */
-  hydraSetAttrByPath = recurse: attrPath: value:
-    if attrPath == [ ] then
-      value
-    else {
-      ${lib.head attrPath} =
-        hydraSetAttrByPath recurse (lib.tail attrPath) value // {
-          recurseForDerivations = recurse;
-        };
-      };
-
-  updateAttrByPath = path: value: set:
-    if path == [] then value
-    else set // {
-      ${lib.head path} = updateAttrByPath (lib.tail path) value (set.${lib.head path} or {});
-    };
-
-  inherit (import ./memoizeFunctionParameters.nix { inherit lib; }) memoizeFunctionParameters;
 
 in parentOverlays: parentArgs: myArgs:
 let
@@ -88,96 +47,6 @@ let
     versionTreeLib.setDefault "" (myArgs.defaultLibraryVersions.${name} or "") value.versionTree
   ) packageSets;
 
-  # Merges attribute sets recursively, but not recursing into derivations,
-  # and error if a derivation is overridden with a non-derivation, or the other way around
-  smartMerge = lib.recursiveUpdateUntil (path: l: r:
-    let
-      lDrv = lib.isDerivation l;
-      rDrv = lib.isDerivation r;
-      prettyPath = lib.concatStringsSep "." path;
-      warning = "Overriding ${lib.optionalString (!lDrv) "non-"}derivation ${
-          lib.concatStringsSep "." path
-        } in nixpkgs"
-        + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
-    in if lDrv == rDrv then
-    # If both sides are derivations, override completely
-      if rDrv then
-        withVerbosity 7 (builtins.trace
-          "[channel ${myArgs.name}] [smartMergePath ${prettyPath}] Overriding because both sides are derivations")
-        true
-        # If both sides are attribute sets, merge recursively
-      else if lib.isAttrs l && lib.isAttrs r then
-        withVerbosity 7 (builtins.trace
-          "[channel ${myArgs.name}] [smartMergePath ${prettyPath}] Recursing because both sides are attribute sets")
-        false
-        # Otherwise, override completely
-      else
-        withVerbosity 7 (builtins.trace
-          "[channel ${myArgs.name}] [smartMergePath ${prettyPath}] Overriding because left is ${
-            builtins.typeOf l
-          } and right is ${builtins.typeOf r}") true
-    else
-      lib.warn warning true);
-
-  # Turns a directory into an attribute set.
-  # Files with a .nix suffix get turned into an attribute name without the
-  # suffix. Directories get turned into an attribute of their name directly.
-  # If there is both a .nix file and a directory with the same name, the file
-  # takes precedence. The context argument is a string shown in trace messages
-  # Each value in the resulting attribute sets has attributes
-  # - value: The Nix value of the file or of the default.nix file in the directory
-  # - deep: In case of directories, whether there is a deep-override file within it. For files always false
-  # - file: The path to the Nix file that was imported
-  # - type: The file type, either "regular" for files or "directory" for directories
-  dirToAttrs = context: dir:
-    let
-      exists = builtins.pathExists dir;
-
-      importPath = name: type:
-        let path = dir + "/${name}";
-        in {
-          directory = lib.nameValuePair name {
-            # TODO: Allow specified deepOverride = true in config.nix
-            deep = builtins.pathExists (path + "/deep-override");
-            config = if builtins.pathExists (path + "/config.nix") then import (path + "/config.nix") else {};
-            inherit path type;
-          };
-
-          regular = if lib.hasSuffix ".nix" name then
-            lib.nameValuePair (lib.removeSuffix ".nix" name) {
-              deep = false;
-              config = {};
-              inherit path type;
-            }
-          else
-            null;
-        }.${type} or (throw "Can't auto-call file type ${type}");
-
-      # Mapping from <package name> -> { value = <package fun>; deep = <bool>; }
-      # This caches the imports of the auto-called package files, such that they don't need to be imported for every version separately
-      entries = lib.filter (v: v != null)
-        (lib.attrValues (lib.mapAttrs importPath (builtins.readDir dir)));
-
-      # Regular files should be preferred over directories, so that e.g.
-      # foo.nix can be used to declare a further import of the foo directory
-      entryAttrs =
-        lib.listToAttrs (lib.sort (a: b: a.value.type == "regular") entries);
-
-      message = ''
-        [channel ${myArgs.name}] [${context}] Importing all Nix expressions from directory "${
-          toString dir
-        }"'' + withVerbosity 6
-        (_: ". Attributes: ${toString (lib.attrNames entryAttrs)}") "";
-
-      result = if exists then
-        withVerbosity 4 (builtins.trace message) entryAttrs
-      else
-        withVerbosity 5 (builtins.trace
-          "[channel ${myArgs.name}] [${context}] Not importing any Nix expressions because `${
-            toString dir
-          }` does not exist") { };
-
-    in result;
 
   /* Imports all directories and Nix files of the given package directory subpath. Returns
       {
@@ -240,30 +109,18 @@ let
 
       deepOutputs =
         let
-          output = path: version: {
+          output = el: {
             name = setName;
-            inherit path;
+            inherit (el) path;
             defaultPath = [ spec.callScopeAttr ];
             deepOverride = spec.deepOverride;
             extraScope = spec.callScopeAttr;
             funs = funs.deep;
-            libraryVersions.${setName} = version;
+            libraryVersions.${setName} = versionTreeLib.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
             defaultTypes.${setName} = "lib";
           };
 
-          defaultOutput =
-            output [ spec.callScopeAttr ] (versionTreeLib.queryDefault "" packageSets.${setName}.versionTree);
-
-
-          aliasOutput = alias: aliasValue:
-            output [ alias ] (versionTreeLib.queryDefault aliasValue packageSets.${setName}.versionTree);
-
-          versionOutput = version: versionInfo:
-            output versionInfo.path version;
-
-        in [ defaultOutput ]
-          ++ lib.mapAttrsToList aliasOutput spec.aliases
-          ++ lib.mapAttrsToList versionOutput spec.versions;
+        in map output spec.packageSetAttrPaths;
 
       shallowOutputs = [{
         name = setName;
@@ -369,6 +226,7 @@ let
       myPkgs =
         let
           original = pkgs.appendOverlays myOverlays;
+
           # TODO: Make sure this throws the correct errors
           redacted = lib.recursiveUpdate (lib.recursiveUpdate original redactingSet) toplevelRedactingSet;
         in
@@ -377,7 +235,7 @@ let
           let
             version = libraryVersions.${name};
             setInfo = packageSets.${name};
-            canonicalPath = setInfo.versions.${version}.path or
+            canonicalPath = setInfo.versions.${version} or
               (throw "No version ${version} for ${name}, available ones are [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames setInfo.versions)} ]");
             canonicalSet = lib.getAttrFromPath canonicalPath original;
 
@@ -404,33 +262,129 @@ let
         lib.mapAttrs (pname: value:
           let
 
-            packageSetVersions = lib.mapAttrs (name: pvalue:
+            defaultedConfig = lib.mapAttrs (name: pvalue:
               let
                 config = value.config.packageSets.${name} or {};
                 type = config.type or spec.defaultType.${name} or "app";
                 version = {
-                  app = versionTreeLib.queryDefault (config.app.version or "") appVersionTrees.${name};
-                  lib = spec.libraryVersions.${name} or libraryVersions.${name};
+                  app = {
+                    app.version = versionTreeLib.queryDefault (config.app.version or "") appVersionTrees.${name};
+                  };
+                  lib = {};
                 }.${type} or
                   (throw ''
                     In ${value.path}/config.nix, packageSets.${name}.type is specified to be "${config.type}", which is not a valid value.
                     Select either "app" or "lib"
                   '');
-              in version
+              in version // { inherit type; }
             ) packageSets;
 
-            #inherit (lib.debug.traceSeq packageSetVersions versionSetSpecific packageSetVersions) pkgs channels outputs;
+            packageSetVersions = lib.mapAttrs (name: pvalue:
+              {
+                app = pvalue.app.version;
+                lib = spec.libraryVersions.${name} or libraryVersions.${name};
+              }.${pvalue.type}
+            ) defaultedConfig;
+
+            # repopulate, takes a set, a set of package versions, and a function to get the same set for different package set versions
+            # Returns the set, but where there's aliases for all package sets according to the version tree
+            # Also takes a function that specifies how
+
+            #repopulate = fun: lib.concatLists (lib.mapAttrsToList (setName: setValue:
+            #  lib.mapAttrsToList (version: versionValue: let path = versionValue.path; in {
+            #    path = path;
+            #    value = fun path setName version;
+            #  }) setValue.versions
+            #  ++ lib.mapAttrsToList (aliasAttr: aliasVersionPrefix: let path = [ aliasAttr ]; in {
+            #    path = path;
+            #    value = fun path setName aliasVersionPrefix;
+            #  }) setValue.aliases
+            #) packageSets);
+
+            #rep = accessPath: let base = lib.getAttrFromPath accessPath localVersions; in lib.foldl' (acc: el: updateAttrByPath el.path el.value acc) base (repopulate (path: set: versionPrefix:
+            #  let callScopeAttr = packageSets.${set}.callScopeAttr; in
+            #  if defaultedConfig.${set}.type == "app" then
+            #    if versionTreeLib.isVersionPrefixOf versionPrefix packageSetVersions.${set}
+            #    then base.${callScopeAttr}
+            #    else
+            #      let
+            #        alternateVersions = packageSetVersions // {
+            #          ${set} = versionTreeLib.queryDefault versionPrefix appVersionTrees.${set};
+            #        };
+            #      in lib.warn "In ${value.path}, the attribute ${lib.concatStringsSep "." path} is used when it shouldn't. To use ${set} version ${versionPrefix}, set packageSets.${set}.app.version = \"${versionPrefix}\""
+            #        (lib.getAttrFromPath accessPath (versionSetSpecific alternateVersions)).${callScopeAttr}
+            #  else throw "In ${value.path}, the attribute ${lib.concatStringsSep "." path} is used, which is not allowed. Libraries should use the generic ${callScopeAttr} instead"
+            #));
+
+            #baseScope = lib.foldl' (acc: name:
+            #  let pvalue = packageSets.${name}; version = packageSetVersions.${name}; in
+            #  lib.foldl' (acc: el:
+            #    let
+            #      result =
+            #        if defaultedConfig.${name}.type == "app" then
+            #          if versionTreeLib.isVersionPrefixOf el.versionPrefix version
+            #          then localVersions.baseScope.${pvalue.callScopeAttr}
+            #          else
+            #            let
+            #              alternateVersions = packageSetVersions // {
+            #                ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
+            #              };
+            #            in lib.warn "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't. To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = \"${el.versionPrefix}\""
+            #              (versionSetSpecific alternateVersions).baseScope.${pvalue.callScopeAttr}
+            #        else throw "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed. Libraries should use the generic ${pvalue.callScopeAttr} instead";
+            #    in updateAttrByPath el.path result acc
+            #  ) acc pvalue.packageSetAttrPaths
+            #) localVersions.baseScope (lib.attrNames packageSets);
+
+            #appRedact = file: name: el:
+            #  if versionTreeLib.isVersionPrefixOf el.versionPrefix version
+            #  then utils.getListAttr packageSets.${name}.callScopeAttr localVersions.baseScopeList
+            #  else
+            #    let
+            #      alternateVersions = packageSetVersions // {
+            #        ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
+            #      };
+            #      result = utils.getListAttr packageSets.${name}.callScopeAttr (versionSetSpecific alternateVersions).baseScopeList;
+            #      warning = ''
+            #        In ${file}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
+            #        To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = "${el.versionPrefix}"
+            #      '';
+            #    in lib.warn warning result;
+
+            #redactingAttrs = utils.nestedListToAttrs (lib.concatLists (lib.mapAttrsToList (name: pvalue:
+            #  map (el: {
+            #    path = el.path;
+            #    value = if isApp then appRedact value.path name el else null;
+            #  }) pvalue.packageSetAttrPaths
+            #  ++
+            #  map (el: {
+            #    path = el.path;
+            #    value =
+            #      if defaultedConfig.${name}.type == "app" then
+            #        if versionTreeLib.isVersionPrefixOf el.versionPrefix version
+            #        then utils.getListAttr pvalue.callScopeAttr localVersions.baseScopeList
+            #        else
+            #          let
+            #            alternateVersions = packageSetVersions // {
+            #              ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
+            #            };
+            #          in lib.warn "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't. To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = \"${el.versionPrefix}\""
+            #            utils.getListAttr pvalue.callScopeAttr (versionSetSpecific alternateVersions).baseScopeList
+            #      else throw "In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed. Libraries should use the generic ${pvalue.callScopeAttr} instead";
+            #  }) pvalue.extraNixpkgsAttrPaths
+            #) packageSets));
+            #toplevelRedactingSet = utils.nestedListToAttrs null;
+
+            channels = lib.mapAttrs (channel: channelValue:
+              channelValue.outputs
+            ) localVersions.channels;
 
             localVersions = versionSetSpecific packageSetVersions;
-
-            # TODO: Splicing for cross compilation?? Take inspiration from mkScope in pkgs/development/haskell-modules/make-package-set.nix
-            baseScope = smartMerge (localVersions.pkgs // localVersions.pkgs.xorg) localVersions.outputs;
 
             extraScope = if spec.extraScope == null then {} else baseScope.${spec.extraScope};
 
             localMeta = meta // {
-              channels = lib.mapAttrs (name: value: value.outputs) localVersions.channels;
-              inherit scope;
+              inherit channels scope;
 
               mapDirectory = dir:
                 { call ? path: callPackage path { } }:
@@ -453,25 +407,64 @@ let
                 } // ownCallPackage fullPathChecked { };
             };
 
-            # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
-            # A callPackage abstraction that allows specifying multiple attribute sets might be nice
-            createScope = isOwn:
-              baseScope // extraScope // lib.optionalAttrs isOwn {
-                ${pname} = super.${pname} or (throw
-                  "${pname} is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
-              } // {
-                # These attributes are reserved
+            createScopes = isOwn:
+              [
+                localVersions.baseScope
+                redactingSet
+              ]
+              ++ lib.optional (spec.extraScope != null) localVersions.baseScope.${spec.extraScope}
+              ++ lib.optional isOwn
+                {
+                  ${pname} = super.${pname} or (throw
+                    "${pname} is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
+                }
+              ++ [{
                 meta = localMeta;
                 inherit (localMeta) channels;
                 flox = localMeta.channels.flox or (throw
                   "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
                 inherit callPackage;
-              };
+              }];
 
-            ownCallPackage = lib.callPackageWith (createScope true);
+            redactingSet = lib.mapAttrs (name: values:
+              utils.attrs.updateAttrByPaths values (localVersions.baseScope.${name} or {})
+            ) lib.groupBy (x: lib.head x.toplevel) redactingList;
 
-            scope = createScope false;
-            callPackage = lib.callPackageWith scope;
+            redactingList = lib.concatLists (lib.mapAttrsToList (name: pvalue:
+              let
+                forApp = el:
+                  if versionTreeLib.isVersionPrefixOf el.versionPrefix version
+                  then lib.warn "Shouldn't access non-pythonPackages atributes" (lib.getAttrFromPath suffix localVersions.baseScope.${pvalue.callScopeAttr})
+                  else
+                    let
+                      alternateVersions = packageSetVersions // {
+                        ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
+                      };
+                      warning = ''
+                        In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
+                        To use ${name} version ${el.versionPrefix}, set packageSets.${name}.app.version = "${el.versionPrefix}"
+                      '';
+                      result = lib.getAttrFromPath suffix (versionSetSpecific alternateVersions).baseScope.${pvalue.callScopeAttr};
+                    in lib.warn warning result;
+
+                forLib = el: throw ''
+                  In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed.
+                  Libraries should use the generic ${lib.concatStringsSep "." (lib.optional (suffix != [] && extraScope != pvalue.callScopeAttr) pvalue.callScopeAttr ++ suffix)} instead
+                '';
+
+                forAny = if defaultedConfig.${name}.type == "app" then forApp else forLib;
+                result = suffix: el: {
+                  toplevel = lib.head el.path;
+                  path = lib.tail el.path;
+                  value = forAny el;
+                };
+              in map (result []) pvalue.packageSetAttrPaths
+              ++ map (el: result el.valueAttrPath) pvalue.extraNixpkgsAttrPaths
+            ) packageSets);
+
+            ownCallPackage = utils.scopeList.callPackage (createScope true);
+
+            callPackage = utils.scopeList.callPackage (createScope false);
 
             ownOutput = {
               # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
@@ -484,46 +477,48 @@ let
           ownOutput) spec.funs;
 
 
-      shallowOutputSet = spec:
-        let
-          packageSet = lib.getAttrFromPath spec.path myPkgs;
-
-          outputTrace = source:
-            lib.mapAttrs (name:
-              builtins.trace "[channel ${myArgs.name}] [path ${
-                lib.concatStringsSep "." spec.path
-              }] Output attribute ${name} comes from ${source}");
-
-          shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
-            (createSet spec packageSet);
-
-          canonicalResult = hydraSetAttrByPath spec.recurse spec.path
-            (shallowOutputs /*// deepOutputs*/);
-
-          #aliasedResult = hydraSetAttrByPath false spec.path
-          #  (lib.getAttrFromPath spec.aliasedPath outputs);
-
-        in canonicalResult;#if spec ? aliasedPath then aliasedResult else canonicalResult;
-
-      deepOutputSet = spec:
-        let
-          packageSet = lib.getAttrFromPath spec.defaultPath myPkgs;
-
-          outputTrace = source:
-            lib.mapAttrs (name:
-              builtins.trace "[channel ${myArgs.name}] [path ${
-                lib.concatStringsSep "." spec.path
-              }] Output attribute ${name} comes from ${source}");
-
-
-          # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
-          deepOutputs = withVerbosity 7 (outputTrace "deep override")
-            (builtins.intersectAttrs spec.funs packageSet);
-
-        in deepOutputs;
 
       outputs =
         let
+
+          shallowOutputSet = spec:
+            let
+              packageSet = lib.getAttrFromPath spec.path myPkgs;
+
+              outputTrace = source:
+                lib.mapAttrs (name:
+                  builtins.trace "[channel ${myArgs.name}] [path ${
+                    lib.concatStringsSep "." spec.path
+                  }] Output attribute ${name} comes from ${source}");
+
+              shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
+                (createSet spec packageSet);
+
+              canonicalResult = hydraSetAttrByPath spec.recurse spec.path
+                (shallowOutputs /*// deepOutputs*/);
+
+              #aliasedResult = hydraSetAttrByPath false spec.path
+              #  (lib.getAttrFromPath spec.aliasedPath outputs);
+
+            in canonicalResult;#if spec ? aliasedPath then aliasedResult else canonicalResult;
+
+          deepOutputSet = spec:
+            let
+              packageSet = lib.getAttrFromPath spec.defaultPath myPkgs;
+
+              outputTrace = source:
+                lib.mapAttrs (name:
+                  builtins.trace "[channel ${myArgs.name}] [path ${
+                    lib.concatStringsSep "." spec.path
+                  }] Output attribute ${name} comes from ${source}");
+
+
+              # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
+              deepOutputs = withVerbosity 7 (outputTrace "deep override")
+                (builtins.intersectAttrs spec.funs packageSet);
+
+            in deepOutputs;
+
           message = "Got output spec paths: ${
             lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path)
             outputSpecs
@@ -533,19 +528,30 @@ let
           result = mergeSets (deepOutputs ++ shallowOutputs);
         in withVerbosity 6 (builtins.trace message) result;
 
+      baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
+
     in {
       pkgs = myPkgs;
-      inherit channels outputs;
+      inherit channels outputs baseScope;
     });
 
+    /*
+    - When e.g. python3Packages is used from the arguments, and python 3 isn't the default version, give a warning
+      Should suggest the fix of creating config.nix and setting packageSets.python.app.version = "3"
+      Should also suggest the fix of using pythonPackages instead, indicating that version X will be used in that case
+    - If it is the default version, allow it, because it allows copy-pasting expressions from nixpkgs directly
+    - Same for channels.*.python3Packages
+    - Allow changing warnings to errors
+    - Only allow above for applications. Libraries will have to use pythonPackages always, error otherwise
 
-  /*
-  In the end we need a (memoized) function that takes the library package set versions, the importing channel and the current channel args and returns the outputs of that
+    - Also allow enforcing the config.nix app vs lib thing
+      Don't give access to package sets unless it is declared in config.nix
+      The only inferred thing is e.g. python.type = "lib" from pythonPackages/*
 
-  Within the implementation of that we will have to refer to the own output with a different libarry package set version, for overlays
+    - Don't give any warnings/errors when accessing python3Packages from channel output
+    - Only add the hydra recursion at the end and for root
+    */
 
-  We should also have a function that turns a version tree and above function into a
-  */
 
 in withVerbosity 3 (builtins.trace
   ("[channel ${myArgs.name}] Evaluating, being imported from ${parentArgs.name}"))

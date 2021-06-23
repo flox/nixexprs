@@ -19,77 +19,90 @@ let
 
   versionTreeLib = (import ./defaultVersionTree.nix { inherit lib; }).library;
 
+  withMatchedAttrs = path: regex: fun: lib.pipe (lib.getAttrFromPath path pkgs) [
+    (lib.mapAttrsToList (name: value: {
+      inherit name value;
+      path = path ++ [ name ];
+      matched = builtins.match regex name;
+    }))
+    (lib.filter (el: el.matched != null))
+    (map fun)
+  ];
+
   /* This function turns the attributes of each package set into a structure like
 
-     {
-       callScopeAttr = <call scope attr>;
-       deepOverride = <overrideFun>;
-       versions = {
-         <version> = {
-           recurse = <bool>;
-           canonicalPath = [ <package> <set> <path> ];
-           aliases = [
-             [ <alias> <one> ]
-             [ <alias> <two> ]
-           ];
-         };
-       };
-     }
+    {
+      # Needed to know which channel directory to import, and for the default scope attribute
+      callScopeAttr = ...;
+      # Needed for knowing default versions
+      versionTree = { ... };
+      # These attributes are redacted for both the toplevel scope (overriding) and its channels (setting)
+      packageSetAttrPaths = [ {
+        # The path for this attribute
+        path = [ ... ];
+        # For which version prefix this attribute should be accessible
+        versionPrefix = [ "3" "8" ];
+        # Whether this version is recursed into
+        recurse = <bool>;
+      } ];
+      # These attributes are additionally redacted for the toplevel scope
+      extraNixpkgsAttrPaths = [ {
+        # The path for this attribute
+        path = [ ... ];
+        # For which version prefix this attribute should be accessible
+        versionPrefix = [ ... ];
+        # What value this attribute path is set to
+        valueAttrPath = [ ... ];
+      } ];
+      # How to deeply override this set
+      deepOverride = ...;
+      versions = {
+        # How to get a nixpkgs package set for this version
+        <version> = [ ... ];
+          path = [ ... ];
+          recurse = <bool>;
+        };
+      };
+    }
   */
   packageSet = setName:
-    { versionForPackageSet, attrPathForVersion, packageSetAttrPaths
-    , toplevelBlacklist, populateToplevel, aliases
-    , callScopeAttr, deepOverride }:
+    { callScopeAttr, versionForPackageSet, attrPathForVersion, packageSetAttrPaths, extraNixpkgsAttrPaths, deepOverride }:
     let
 
-      addVersion = path:
-        let set = lib.attrByPath path null pkgs;
-        in {
-          inherit path;
-          version = lib.mapNullable versionForPackageSet set;
-        };
+      output = {
+        inherit callScopeAttr deepOverride;
+      };
 
-      # Mapping from version to list of paths it can be found in
-      versionPaths = lib.pipe packageSetAttrPaths [
-        (map addVersion)
-        (lib.filter (pv: pv.version != null))
-        (lib.groupBy (pv: pv.version))
-        (lib.mapAttrs (version: pvs: map (pv: pv.path) pvs))
-      ];
+      allVersions = lib.unique (map (el:
+        versionForPackageSet (lib.getAttrFromPath el.path pkgs)
+      ) packageSetAttrPaths);
 
-      annotateVersionPaths = version: paths:
+      pregenOutput.versions = lib.genAttrs allVersions attrPathForVersion;
+
+      pregenOutput.packageSetAttrPaths = map (el: el // {
+        recurse = lib.attrByPath el.path { } releasePkgs != { };
+      }) packageSetAttrPaths;
+
+      pregenOutput.extraNixpkgsAttrPaths = extraNixpkgsAttrPaths;
+
+      pregenOutput.versionTree =
         let
-          path = attrPathForVersion version;
-          valid = paths == [ path ];
-          result = {
-            # If this package set is built in nixpkgs hydra, also build it ourselves
-            recurse = lib.attrByPath path { } releasePkgs != { };
-            inherit path;
-          };
-        in if valid then result else null;
+          baseTree = versionTreeLib.insertMultiple allVersions versionTreeLib.empty;
+          final = lib.foldl' (acc: el:
+            versionTreeLib.setDefault (lib.concatStringsSep "." el.versionPrefix) (versionForPackageSet (lib.getAttrFromPath el.path pkgs)) acc
+          ) baseTree packageSetAttrPaths;
+        in final;
 
-      versions = lib.filterAttrs (version: res: res != null)
-        (lib.mapAttrs annotateVersionPaths versionPaths);
+      #pregenAttrs = map (x: removeAttrs x [ "value" ]) nixpkgsAttrs;
 
-      versionTree =
-        let
-          baseTree = versionTreeLib.insertMultiple (lib.attrNames versions) versionTreeLib.empty;
-          withDefaults = versionTreeLib.setDefault "" (versionForPackageSet pkgs.${callScopeAttr}) baseTree;
-          withAliases = lib.foldl' (tree: attr:
-            versionTreeLib.setDefault aliases.${attr} (versionForPackageSet pkgs.${attr}) tree
-          ) withDefaults (lib.attrNames aliases);
-        in withAliases;
+      #final = lib.zipWith (a: b: a // b) nixpkgsAttrs pregenResult.${setName}.pregenAttrs;
 
-    in if pregenerate then {
-      inherit versions toplevelBlacklist versionTree;
-    } else {
-      inherit (pregenResult.${setName}) versions toplevelBlacklist versionTree;
-      inherit callScopeAttr deepOverride populateToplevel aliases;
-    };
+    in if pregenerate then pregenOutput else pregenResult.${setName} // output;
 
 in lib.mapAttrs packageSet {
 
-  /* Each entry here needs these attributes:
+  /* FIXME: Update this comment
+    Each entry here needs these attributes:
      - versionForPackageSet :: PackageSet -> Version
        Returns the version for a package set, or null if no version could be determined
      - attrPathForVersion :: Version -> [String]
@@ -105,6 +118,8 @@ in lib.mapAttrs packageSet {
 
   haskell = {
 
+    callScopeAttr = "haskellPackages";
+
     versionForPackageSet = set: set.ghc.version or null;
 
     attrPathForVersion = version:
@@ -115,24 +130,33 @@ in lib.mapAttrs packageSet {
       in [ "haskell" "packages" attribute ];
 
     packageSetAttrPaths = let
-      matches = name: builtins.match "ghc[0-9]*" name != null;
-      names = lib.filter matches (lib.attrNames (pkgs.haskell.packages or { }));
-      canonicalPaths = map (name: [ "haskell" "packages" name ]) names;
-    in canonicalPaths;
+      packages = withMatchedAttrs [ "haskell" "packages" ] "ghc([0-9]+)" (el: {
+        inherit (el) path;
+        versionPrefix =
+          let
+            versionList = lib.versions.splitVersion el.value.ghc.version;
+            go = list: if lib.hasPrefix (lib.concatStrings list) (lib.head el.matched) then list else go (lib.init list);
+          in go versionList;
+      });
+    in packages;
 
-    aliases = {};
-
-    callScopeAttr = "haskellPackages";
-
-    toplevelBlacklist = [
-      [ "ghc" ]
-      [ "haskell" "compiler" ]
-      [ "haskell" "packages" ]
+    extraNixpkgsAttrPaths = let
+      compilers = withMatchedAttrs [ "haskell" "compiler" ] "ghc([0-9]+)" (el: {
+        inherit (el) path;
+        versionPrefix =
+          let
+            versionList = lib.versions.splitVersion el.value.version;
+            go = list: if lib.hasPrefix (lib.concatStrings list) (lib.head el.matched) then list else go (lib.init list);
+          in go versionList;
+        valueAttrPath = [ "ghc" ];
+      });
+    in compilers ++ [
+      {
+        path = [ "ghc" ];
+        versionPrefix = [ ];
+        valueAttrPath = [ "ghc" ];
+      }
     ];
-
-    populateToplevel = set: {
-      ghc = set.ghc;
-    };
 
     deepOverride = set: overrides:
       set.override (old: {
@@ -144,6 +168,8 @@ in lib.mapAttrs packageSet {
 
   erlang = {
 
+    callScopeAttr = "beamPackages";
+
     versionForPackageSet = set: set.erlang.version or null;
 
     attrPathForVersion = version:
@@ -152,36 +178,45 @@ in lib.mapAttrs packageSet {
         attribute = "erlangR${lib.elemAt parts 0}";
       in [ "beam" "packages" attribute ];
 
-    packageSetAttrPaths = let
-      matches = name: builtins.match "erlangR[0-9]*" name != null;
-      names = lib.filter matches (lib.attrNames (pkgs.beam.packages or { }));
-      paths = map (name: [ "beam" "packages" name ]) names;
-    in paths;
+    packageSetAttrPaths =
+      let
+        packages = withMatchedAttrs [ "beam" "packages" ] "erlangR([0-9]+)" (el: {
+          inherit (el) path;
+          versionPrefix = [ (lib.head el.matched) ];
+        });
+      in packages ++ [
+        { path = [ "beam" "packages" "erlang" ]; versionPrefix = []; }
+      ];
 
-    aliases = {};
+    extraNixpkgsAttrPaths =
+      let
+        interpreters = lib.concatLists (withMatchedAttrs [ "beam" "interpreters" ] "erlangR([0-9]+)" (el: [
+          {
+            inherit (el) path;
+            versionPrefix = [ (lib.head el.matched) ];
+            valueAttrPath = [ "erlang" ];
+          }
+          {
+            path = [ el.name ];
+            versionPrefix = [ (lib.head el.matched) ];
+            valueAttrPath = [ "erlang" ];
+          }
+        ]));
 
-    callScopeAttr = "beamPackages";
-
-    toplevelBlacklist = let
-      matches = name: builtins.match "erlangR[0-9]*" name != null;
-      erlangAttrs = map lib.singleton (lib.filter matches (lib.attrNames pkgs));
-    in [
-      [ "beam" "interpreters" ]
-      [ "beam" "packages" ]
-      [ "rebar" ]
-      [ "rebar3" ]
-      [ "erlang" ]
-    ] ++ erlangAttrs;
-
-    populateToplevel = set: {
-      inherit (set) erlang rebar rebar3;
-    };
+      in interpreters ++ [
+        { path = [ "beam" "interpreters" "erlang" ]; versionPrefix = [ ]; valueAttrPath = [ "erlang" ]; }
+        { path = [ "erlang" ]; versionPrefix = [ ]; valueAttrPath = [ "erlang" ]; }
+        { path = [ "rebar" ]; versionPrefix = [ ]; valueAttrPath = [ "rebar" ]; }
+        { path = [ "rebar3" ]; versionPrefix = [ ]; valueAttrPath = [ "rebar3" ]; }
+      ];
 
     deepOverride = set: overrides: set.extend (self: super: overrides);
 
   };
 
   python = {
+
+    callScopeAttr = "pythonPackages";
 
     versionForPackageSet = set: set.python.version or null;
 
@@ -191,29 +226,16 @@ in lib.mapAttrs packageSet {
         attribute = "python${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
       in [ attribute ];
 
-    packageSetAttrPaths = let
-      matches = name: builtins.match "python[0-9][0-9]+Packages" name != null;
-      names = lib.filter matches (lib.attrNames pkgs);
-    in map lib.singleton names;
+    packageSetAttrPaths = withMatchedAttrs [] "python([0-9])([0-9]+?)Packages" (el: {
+      inherit (el) path;
+      versionPrefix = lib.filter (match: match != "") el.matched;
+    });
 
-    aliases = {
-      python2Packages = "2";
-      python3Packages = "3";
-    };
-
-    callScopeAttr = "pythonPackages";
-
-    toplevelBlacklist = let
-      # TODO python.*Full
-      interpreterAttrs = lib.filter (name: builtins.match "python[0-9]*" name != null) (lib.attrNames pkgs);
-    in [
-      [ "pythonInterpreters" ]
-    ] ++ map lib.singleton interpreterAttrs;
-
-    populateToplevel = set: {
-      python = set.python;
-      # pythonFull = TODO
-    };
+    extraNixpkgsAttrPaths = withMatchedAttrs [] "python([0-9]?)([0-9]+?)" (el: {
+      inherit (el) path;
+      versionPrefix = lib.filter (match: match != "") el.matched;
+      valueAttrPath = [ "python" ];
+    });
 
     deepOverride = set: overrides:
       set.override (old: {
@@ -225,6 +247,8 @@ in lib.mapAttrs packageSet {
 
   perl = {
 
+    callScopeAttr = "perlPackages";
+
     versionForPackageSet = set: set.perl.version or null;
 
     attrPathForVersion = version:
@@ -233,28 +257,20 @@ in lib.mapAttrs packageSet {
         attribute = "perl${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
       in [ attribute ];
 
-    packageSetAttrPaths = let
-      matches = name: builtins.match "perl[0-9]+Packages" name != null;
-      names = lib.filter matches (lib.attrNames pkgs);
-    in map lib.singleton names;
+    packageSetAttrPaths = withMatchedAttrs [] "perl([0-9])([0-9]+)Packages" (el: {
+      inherit (el) path;
+      versionPrefix = lib.filter (match: match != "") el.matched;
+    });
 
-    aliases = {};
-
-    callScopeAttr = "perlPackages";
-
-    toplevelBlacklist = let
-      interpreterAttrs = lib.filter (name: builtins.match "perl[0-9]*" name != null) (lib.attrNames pkgs);
-    in [
-      [ "perlInterpreters" ]
-    ] ++ map lib.singleton interpreterAttrs;
-
-    populateToplevel = set: {
-      perl = set.perl;
-    };
+    extraNixpkgsAttrPaths = withMatchedAttrs [] "perl([0-9]?)([0-9]+?)" (el: {
+      inherit (el) path;
+      versionPrefix = lib.filter (match: match != "") el.matched;
+      valueAttrPath = [ "perl" ];
+    });
 
     deepOverride = set: overrides:
       set.override
-      (old: { overrides = pkgs: old.overrides pkgs // overrides; });
+        (old: { overrides = pkgs: old.overrides pkgs // overrides; });
 
   };
 
