@@ -1,7 +1,8 @@
 { lib ? import <nixpkgs/lib> }: {
 
-  callPackage = autoArgs: f: args:
+  callPackageWith = autoArgs: fn: args:
     let
+      f = if lib.isFunction fn then fn else import fn;
       funArgs = lib.functionArgs f;
       auto = lib.foldl' (scope: args: scope // builtins.intersectAttrs funArgs args) {} autoArgs;
     in lib.makeOverridable f (auto // args);

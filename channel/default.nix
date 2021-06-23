@@ -74,7 +74,7 @@ in let
       } else {
         failure = ''Directory name of topdir is just "floxpkgs"'';
       };
-      gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
+      gitConfig = utils.nameFromGit topdir;
       nixPath = let
         matchingEntries = lib.filter (e: e.path == topdir) channelFloxpkgsList;
         matchingNames = lib.unique (map (e: e.name) matchingEntries);
@@ -193,15 +193,15 @@ in let
   };
 
   outputFun = import ./output.nix {
-    inherit outputFun channelArgs pkgs withVerbosity packageSets versionTreeLib;
+    inherit outputFun channelArgs pkgs withVerbosity packageSets utils;
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
   };
 
   libraryVersions = lib.mapAttrs (name: value:
-    versionTreeLib.queryDefault (defaultLibraryVersions.${name} or "") value.versionTree
+    utils.versionTreeLib.queryDefault (defaultLibraryVersions.${name} or "") value.versionTree
   ) packageSets;
 
-  versionTreeLib = (import ./defaultVersionTree.nix { inherit lib; }).library;
+  utils = import ./utils { inherit lib; };
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {

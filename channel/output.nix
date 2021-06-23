@@ -1,6 +1,6 @@
 # Returns the auto-generated output of a channel
 # TODO: Add debug logs
-{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides, packageSets, versionTreeLib }:
+{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides, packageSets, utils }:
 let
   inherit (pkgs) lib;
 
@@ -44,9 +44,8 @@ in parentOverlays: parentArgs: myArgs:
 let
 
   appVersionTrees = lib.mapAttrs (name: value:
-    versionTreeLib.setDefault "" (myArgs.defaultLibraryVersions.${name} or "") value.versionTree
+    utils.versionTreeLib.setDefault "" (myArgs.defaultLibraryVersions.${name} or "") value.versionTree
   ) packageSets;
-
 
   /* Imports all directories and Nix files of the given package directory subpath. Returns
       {
@@ -66,7 +65,7 @@ let
       dir = myArgs.topdir + "/${subpath}";
 
       entries = lib.mapAttrsToList lib.nameValuePair
-        (dirToAttrs "packageSet ${setName}" dir);
+        (utils.dirToAttrs (verbosity: message: withVerbosity verbosity (builtins.trace "[channel ${myArgs.name}] [packageSet ${setName}] ${message}")) dir);
 
       parts = lib.mapAttrs (n: v: lib.listToAttrs v)
         (lib.partition (e: e.value.deep) entries);
@@ -116,11 +115,14 @@ let
             deepOverride = spec.deepOverride;
             extraScope = spec.callScopeAttr;
             funs = funs.deep;
-            libraryVersions.${setName} = versionTreeLib.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
+            libraryVersions.${setName} = utils.versionTreeLib.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
             defaultTypes.${setName} = "lib";
           };
 
-        in map output spec.packageSetAttrPaths;
+        in map output spec.packageSetAttrPaths ++ [ (output {
+          path = [ spec.callScopeAttr ];
+          versionPrefix = [];
+        }) ];
 
       shallowOutputs = [{
         name = setName;
@@ -186,7 +188,7 @@ let
       channels.<channel> = <outputs>;
     };
   */
-  versionSetSpecific = memoizeFunctionParameters allPackageSetVersions (libraryVersions:
+  versionSetSpecific = utils.memoizeFunctionParameters allPackageSetVersions (libraryVersions:
     let
 
       # Construct a single pkgs for all library versions of a channel
@@ -211,7 +213,7 @@ let
         deepOverlay = self: super:
           let
             deepOverlaySet = spec:
-              overlaySet super spec.path (superSet:
+              utils.attrs.overlaySet super spec.path (superSet:
                 withVerbosity 5 (builtins.trace "[channel ${myArgs.name}] [path ${
                     lib.concatStringsSep "." spec.path
                   }] Creating overriding package set") spec.deepOverride superSet
@@ -227,25 +229,21 @@ let
         let
           original = pkgs.appendOverlays myOverlays;
 
-          # TODO: Make sure this throws the correct errors
-          redacted = lib.recursiveUpdate (lib.recursiveUpdate original redactingSet) toplevelRedactingSet;
-        in
-        # TODO: If app, not only allow access from pythonPackages, but also python${major}Packages (aliases) and python${major}${minor}Packages (canonicalPath)
-        lib.foldl' (set: name:
-          let
-            version = libraryVersions.${name};
-            setInfo = packageSets.${name};
-            canonicalPath = setInfo.versions.${version} or
-              (throw "No version ${version} for ${name}, available ones are [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames setInfo.versions)} ]");
-            canonicalSet = lib.getAttrFromPath canonicalPath original;
+          result = el: {
+            path = el.path;
+            value = throw "Can't access ${el.path} from nixpkgs. This shouldn't really occur";
+          };
 
-            withCallScopeAttr = updateAttrByPath [ setInfo.callScopeAttr ] canonicalSet set;
-            result = withCallScopeAttr // setInfo.populateToplevel canonicalSet;
-          in
-            builtins.seq version (builtins.trace "Allowing access to ${lib.concatStringsSep "." canonicalPath} from ${setInfo.callScopeAttr}"
-              # Force early version resolution error
-              result)
-        ) redacted (lib.attrNames libraryVersions);
+          redactingList = lib.concatLists (lib.mapAttrsToList (name: pvalue:
+            map result pvalue.packageSetAttrPaths
+            ++ map result pvalue.extraNixpkgsAttrPaths
+            ++ [{
+              path = [ pvalue.callScopeAttr ];
+              value = lib.getAttrFromPath pvalue.versions.${libraryVersions.${name}} original;
+            }]
+          ) packageSets);
+
+        in utils.attrs.updateAttrByPaths redactingList original;
 
 
       channels =
@@ -268,7 +266,7 @@ let
                 type = config.type or spec.defaultType.${name} or "app";
                 version = {
                   app = {
-                    app.version = versionTreeLib.queryDefault (config.app.version or "") appVersionTrees.${name};
+                    app.version = utils.versionTreeLib.queryDefault (config.app.version or "") appVersionTrees.${name};
                   };
                   lib = {};
                 }.${type} or
@@ -285,21 +283,6 @@ let
                 lib = spec.libraryVersions.${name} or libraryVersions.${name};
               }.${pvalue.type}
             ) defaultedConfig;
-
-            # repopulate, takes a set, a set of package versions, and a function to get the same set for different package set versions
-            # Returns the set, but where there's aliases for all package sets according to the version tree
-            # Also takes a function that specifies how
-
-            #repopulate = fun: lib.concatLists (lib.mapAttrsToList (setName: setValue:
-            #  lib.mapAttrsToList (version: versionValue: let path = versionValue.path; in {
-            #    path = path;
-            #    value = fun path setName version;
-            #  }) setValue.versions
-            #  ++ lib.mapAttrsToList (aliasAttr: aliasVersionPrefix: let path = [ aliasAttr ]; in {
-            #    path = path;
-            #    value = fun path setName aliasVersionPrefix;
-            #  }) setValue.aliases
-            #) packageSets);
 
             #rep = accessPath: let base = lib.getAttrFromPath accessPath localVersions; in lib.foldl' (acc: el: updateAttrByPath el.path el.value acc) base (repopulate (path: set: versionPrefix:
             #  let callScopeAttr = packageSets.${set}.callScopeAttr; in
@@ -375,21 +358,22 @@ let
             #) packageSets));
             #toplevelRedactingSet = utils.nestedListToAttrs null;
 
+            # TODO: Redact
             channels = lib.mapAttrs (channel: channelValue:
               channelValue.outputs
             ) localVersions.channels;
 
             localVersions = versionSetSpecific packageSetVersions;
 
-            extraScope = if spec.extraScope == null then {} else baseScope.${spec.extraScope};
+            #extraScope = if spec.extraScope == null then {} else baseScope.${spec.extraScope};
 
             localMeta = meta // {
-              inherit channels scope;
+              inherit channels;
 
               mapDirectory = dir:
                 { call ? path: callPackage path { } }:
                 lib.mapAttrs (name: value: call value.path)
-                (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
+                (utils.dirToAttrs (verbosity: message: withVerbosity verbosity (builtins.trace "[channel ${myArgs.name}] [mapDirectory ${baseNameOf dir}] ${message}")) dir);
 
               importNix =
                 { channel ? meta.importingChannel, project, path, ... }@args:
@@ -428,17 +412,18 @@ let
 
             redactingSet = lib.mapAttrs (name: values:
               utils.attrs.updateAttrByPaths values (localVersions.baseScope.${name} or {})
-            ) lib.groupBy (x: lib.head x.toplevel) redactingList;
+            ) (lib.groupBy (x: x.toplevel) redactingList);
 
             redactingList = lib.concatLists (lib.mapAttrsToList (name: pvalue:
               let
-                forApp = el:
-                  if versionTreeLib.isVersionPrefixOf el.versionPrefix version
+                version = packageSetVersions.${name};
+                forApp = suffix: el:
+                  if utils.versionTreeLib.isVersionPrefixOf el.versionPrefix version
                   then lib.warn "Shouldn't access non-pythonPackages atributes" (lib.getAttrFromPath suffix localVersions.baseScope.${pvalue.callScopeAttr})
                   else
                     let
                       alternateVersions = packageSetVersions // {
-                        ${name} = versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
+                        ${name} = utils.versionTreeLib.queryDefault el.versionPrefix appVersionTrees.${name};
                       };
                       warning = ''
                         In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
@@ -447,24 +432,28 @@ let
                       result = lib.getAttrFromPath suffix (versionSetSpecific alternateVersions).baseScope.${pvalue.callScopeAttr};
                     in lib.warn warning result;
 
-                forLib = el: throw ''
-                  In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed.
-                  Libraries should use the generic ${lib.concatStringsSep "." (lib.optional (suffix != [] && extraScope != pvalue.callScopeAttr) pvalue.callScopeAttr ++ suffix)} instead
-                '';
+                forLib = suffix: el:
+                  if el.versionPrefix == []
+                  then lib.getAttrFromPath suffix localVersions.baseScope.${pvalue.callScopeAttr}
+                  else
+                    throw ''
+                      In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed.
+                      Libraries should use the generic ${lib.concatStringsSep "." (lib.optional (suffix != [] && spec.extraScope != pvalue.callScopeAttr) pvalue.callScopeAttr ++ suffix)} instead
+                    '';
 
                 forAny = if defaultedConfig.${name}.type == "app" then forApp else forLib;
                 result = suffix: el: {
                   toplevel = lib.head el.path;
                   path = lib.tail el.path;
-                  value = forAny el;
+                  value = forAny suffix el;
                 };
               in map (result []) pvalue.packageSetAttrPaths
-              ++ map (el: result el.valueAttrPath) pvalue.extraNixpkgsAttrPaths
+              ++ map (el: result el.valueAttrPath el) pvalue.extraNixpkgsAttrPaths
             ) packageSets);
 
-            ownCallPackage = utils.scopeList.callPackage (createScope true);
+            ownCallPackage = utils.scopeList.callPackageWith (createScopes true);
 
-            callPackage = utils.scopeList.callPackage (createScope false);
+            callPackage = utils.scopeList.callPackageWith (createScopes false);
 
             ownOutput = {
               # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
@@ -494,7 +483,7 @@ let
               shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
                 (createSet spec packageSet);
 
-              canonicalResult = hydraSetAttrByPath spec.recurse spec.path
+              canonicalResult = utils.attrs.hydraSetAttrByPath spec.recurse spec.path
                 (shallowOutputs /*// deepOutputs*/);
 
               #aliasedResult = hydraSetAttrByPath false spec.path
@@ -528,7 +517,7 @@ let
           result = mergeSets (deepOutputs ++ shallowOutputs);
         in withVerbosity 6 (builtins.trace message) result;
 
-      baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
+      baseScope = utils.attrs.smartMerge (verbosity: message: withVerbosity verbosity (builtins.trace "[channel ${myArgs.name}] ${message}")) (myPkgs // myPkgs.xorg) outputs;
 
     in {
       pkgs = myPkgs;

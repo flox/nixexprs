@@ -9,7 +9,7 @@
   # - deep: In case of directories, whether there is a deep-override file within it. For files always false
   # - file: The path to the Nix file that was imported
   # - type: The file type, either "regular" for files or "directory" for directories
-  dirToAttrs = context: dir:
+  dirToAttrs = traceWithVerbosity: dir:
     let
       exists = builtins.pathExists dir;
 
@@ -43,19 +43,12 @@
       entryAttrs =
         lib.listToAttrs (lib.sort (a: b: a.value.type == "regular") entries);
 
-      message = ''
-        [channel ${myArgs.name}] [${context}] Importing all Nix expressions from directory "${
-          toString dir
-        }"'' + withVerbosity 6
-        (_: ". Attributes: ${toString (lib.attrNames entryAttrs)}") "";
-
       result = if exists then
-        withVerbosity 4 (builtins.trace message) entryAttrs
+        traceWithVerbosity 4 "Importing all Nix expressions from directory ${toString dir}"
+          traceWithVerbosity 6 "Importing attributes ${toString (lib.attrNames entryAttrs)}"
+            entryAttrs
       else
-        withVerbosity 5 (builtins.trace
-          "[channel ${myArgs.name}] [${context}] Not importing any Nix expressions because `${
-            toString dir
-          }` does not exist") { };
+        traceWithVerbosity 5 "Not importing any Nix expressions because ${toString dir} does not exist" { };
 
     in result;
 }

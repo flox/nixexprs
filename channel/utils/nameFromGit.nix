@@ -5,7 +5,7 @@
 #
 # It is important that this file never fails. Any error to during evaluation
 # should make it return a failure
-{ lib, topdir }:
+{ lib }: topdir:
 
 let
   gitConfigPath = topdir + "/.git/config";
