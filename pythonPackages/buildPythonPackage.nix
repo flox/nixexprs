@@ -10,7 +10,7 @@
 , channel ? meta.importingChannel, nativeBuildInputs ? [ ], ... }@args:
 
 let source = meta.getChannelSource channel project args;
-in builtins.trace (''flox.buildPythonPackage(project="'' + project + ''", ''
+in meta.trace "buildPythonPackage" 0 (''flox.buildPythonPackage(project="'' + project + ''", ''
   + ''python.version="'' + python.version + ''", '' + "with "
   + builtins.toString (builtins.length (builtins.attrNames pythonPackages))
   + " pythonPackages)")

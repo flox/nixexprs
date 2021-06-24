@@ -13,15 +13,17 @@ let
 
         inherit showValue;
 
-        _contextPrefix = lib.concatMapStrings (c:
+        contextPrefix = lib.concatMapStrings (c:
           "[${c.name}${lib.optionalString (c.name != "") "="}${showValue c.value}] "
         ) context;
 
-        context = name: value: trace (context ++ [ { inherit name value; } ]);
+        setContext = name: value: trace (context ++ [ { inherit name value; } ]);
+
+        withContext = name: value: cont: cont (trace (context ++ [ { inherit name value; } ]));
 
         __functor = self: subsystem: verbosity:
           if subsystemVerbosities.${subsystem} or defaultVerbosity >= verbosity
-          then message: builtins.trace "<${subsystem}:${toString verbosity}> ${self._contextPrefix}${showValue message}"
+          then message: builtins.trace "<${subsystem}:${toString verbosity}> ${self.contextPrefix}${showValue message}"
           else message: value: value;
 
       };

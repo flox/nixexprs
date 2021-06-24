@@ -6,4 +6,5 @@
   versionTreeLib = import ./versionTree.nix { inherit lib; };
   inherit (import ./dirToAttrs.nix { inherit lib; }) dirToAttrs;
   scopeList = import ./scopeList.nix { inherit lib; };
+  traceWith = (import ./tracing.nix { inherit lib; }).traceWith;
 }

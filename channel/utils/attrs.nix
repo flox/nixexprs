@@ -1,33 +1,32 @@
 { lib ? import <nixpkgs/lib> }:
 let
-  # Slighty broken
-  #nestedListToAttrs =
-  #  let
-  #    prettyPath = el: lib.concatStringsSep "." el.path;
+  nestedListToAttrs =
+    let
+      prettyPath = el: lib.concatStringsSep "." el.path;
 
-  #    go = index: list:
-  #      let
-  #        p = lib.partition (el: lib.length el.path <= index) list;
-  #        rlen = lib.length p.right;
-  #        nested = lib.mapAttrs (name: go (index + 1)) (lib.groupBy (el: lib.elemAt el.path index) list);
+      go = index: list:
+        let
+          p = lib.partition (el: lib.length el.path <= index) list;
+          rlen = lib.length p.right;
+          nested = lib.mapAttrs (name: go (index + 1)) (lib.groupBy (el: lib.elemAt el.path index) list);
 
-  #      in if rlen == 0 then nested
-  #      else if rlen == 1 then
-  #        let relem = lib.head p.right; in
-  #        if p.wrong == [] then relem.value
-  #        else if lib.isAttrs relem.value then
-  #          let
-  #            expandedRight = lib.mapAttrsToList (name: value: {
-  #              path = relem.path ++ [ name ];
-  #              value = value;
-  #            }) relem.value;
-  #          in go index (expandedRight ++ p.wrong)
-  #        else
-  #          throw "nestedListToAttrs: Conflict between ${prettyPath (lib.head p.wrong)} and ${prettyPath (lib.head p.right)}"
-  #      else throw "nestedListToAttrs: Path ${prettyPath (lib.head p.right)} is set multiple times";
-  #  in list: if list == []
-  #    then throw "nestedListToAttrs: Empty input list"
-  #    else go 0 list;
+        in if rlen == 0 then nested
+        else if rlen == 1 then
+          let relem = lib.head p.right; in
+          if p.wrong == [] then relem.value
+          else if lib.isAttrs relem.value then
+            let
+              expandedRight = lib.mapAttrsToList (name: value: {
+                path = relem.path ++ [ name ];
+                value = value;
+              }) relem.value;
+            in go index (expandedRight ++ p.wrong)
+          else
+            throw "nestedListToAttrs: Conflict between ${prettyPath (lib.head p.wrong)} and ${prettyPath (lib.head p.right)}"
+        else throw "nestedListToAttrs: Path ${prettyPath (lib.head p.right)} is set multiple times";
+    in list: if list == []
+      then throw "nestedListToAttrs: Empty input list"
+      else go 0 list;
 
   # Not needed I think
   #getListAttr = attr: list:
@@ -83,7 +82,7 @@ let
 
   # Merges attribute sets recursively, but not recursing into derivations,
   # and error if a derivation is overridden with a non-derivation, or the other way around
-  smartMerge = traceWithVerbosity: lib.recursiveUpdateUntil (path: l: r:
+  smartMerge = trace: lib.recursiveUpdateUntil (path: l: r: trace.withContext "path" path (trace:
     let
       lDrv = lib.isDerivation l;
       rDrv = lib.isDerivation r;
@@ -95,26 +94,24 @@ let
     in if lDrv == rDrv then
     # If both sides are derivations, override completely
       if rDrv then
-        traceWithVerbosity 7
-          "[smartMergePath ${prettyPath}] Overriding because both sides are derivations"
+        trace "smartMerge" 7 "Overriding because both sides are derivations"
         true
         # If both sides are attribute sets, merge recursively
       else if lib.isAttrs l && lib.isAttrs r then
-        traceWithVerbosity 7
-          "[smartMergePath ${prettyPath}] Recursing because both sides are attribute sets"
+        trace "smartMerge" 7 "Recursing because both sides are attribute sets"
         false
         # Otherwise, override completely
       else
-        traceWithVerbosity 7
-          "[smartMergePath ${prettyPath}] Overriding because left is ${
+        trace "smartMerge" 7
+          "Overriding because left is ${
             builtins.typeOf l
           } and right is ${builtins.typeOf r}" true
     else
-      lib.warn warning true);
+      lib.warn warning true));
 
 in {
   library = {
-    inherit overlaySet hydraSetAttrByPath updateAttrByPath updateAttrByPaths smartMerge;
+    inherit nestedListToAttrs overlaySet hydraSetAttrByPath updateAttrByPath updateAttrByPaths smartMerge;
   };
 
   #test = nestedListToAttrs [

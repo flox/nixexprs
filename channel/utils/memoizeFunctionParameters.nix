@@ -25,7 +25,7 @@
     nix-repl> memoizedFunction { letter = "a"; number = "1"; }
     null
   */
-  memoizeFunctionParameters = paramSpace: function:
+  memoizeFunctionParameters = trace: paramSpace: function:
     let
       params = lib.attrNames paramSpace;
       count = lib.length params;
@@ -44,7 +44,7 @@
           );
         in
           # If all parameters are filled out, apply the function to them
-          if index == count then builtins.trace "memoizeFunctionParameters: Calling function with arguments ${lib.generators.toPretty { multiline = false; } args}" (function args)
+          if index == count then trace "memoizeFunctionParameters" 2 "Calling function with arguments ${trace.showValue args}" (function args)
           # Only if that's not the case, return the table
           else table;
 
@@ -62,10 +62,10 @@
 
     in args:
       if lib.attrNames args != params then
-        throw "Provided arguments [ ${lib.concatStringsSep ", " (lib.attrNames args)} ] don't match memoized parameters [ ${lib.concatStringsSep ", " params} ]"
+        throw "memoizeFunctionParameters: ${trace.contextPrefix}Provided arguments [ ${lib.concatStringsSep ", " (lib.attrNames args)} ] don't match memoized parameters [ ${lib.concatStringsSep ", " params} ]"
       else lib.foldl' (table: argName:
         let argValue = args.${argName}; in
-        table.${argValue} or (throw "memoizeFunctionParameters: Parameter \"${argName}\" was not declared to memoize value \"${argValue}\". Only values [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames table)} ] are memoized")
+        table.${argValue} or (throw "memoizeFunctionParameters: ${trace.contextPrefix}Parameter \"${argName}\" was not declared to memoize value \"${argValue}\". Only values [ ${lib.concatMapStringsSep ", " (x: "\"${x}\"") (lib.attrNames table)} ] are memoized")
       ) fullTable (lib.attrNames args);
 
   test = let

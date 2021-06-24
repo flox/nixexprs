@@ -2,7 +2,7 @@
 { name ? null, topdir, extraOverlays ? [ ], defaultLibraryVersions ? {} }@chanArgs:
 
 # Arguments for the command line
-{ name ? null, debugVerbosity ? 0
+{ name ? null, debugVerbosity ? 0, subsystemVerbosities ? {}
   # JSON string of a `<channelName> -> <projectName> -> <srcpath>` mapping. This overrides the sources used by these channels/projects to the given paths.
 , sourceOverrideJson ? "{}", _return ? "outputs"
   # Used to detect whether this default.nix is a channel (by inspecting function arguments)
@@ -27,8 +27,10 @@ in let
   pkgs = import <nixpkgs> nixpkgsArgs;
   inherit (pkgs) lib;
 
-  withVerbosity = level: fun: val:
-    if debugVerbosity >= level then fun val else val;
+  trace = utils.traceWith {
+    defaultVerbosity = debugVerbosity;
+    inherit subsystemVerbosities;
+  };
 
   # A list of { name; success | failure } entries, representing heuristics used
   # to determine the channel name, in the order of preference
@@ -110,9 +112,9 @@ in let
       success = lib.warn fallbackNameWarning "_unknown";
     };
     firstSuccess = lib.findFirst (e: e ? success) fallback nameHeuristics;
-  in withVerbosity 2 (builtins.trace
-    "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}")
-  firstSuccess.success;
+  in trace "name-inference" 2
+    "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}"
+    firstSuccess.success;
 
   myChannelArgs = { inherit name topdir extraOverlays defaultLibraryVersions args; };
 
@@ -144,22 +146,17 @@ in let
           && (lib.functionArgs e.value) ? _isFloxChannel);
         result = if isFloxChannel.success then
           if isFloxChannel.value then
-            withVerbosity 1 (builtins.trace
-              "[channel ${e.name}] Importing from `${toString e.path}`") true
+            trace "channel-discovery" 1 "[channel ${e.name}] Importing from `${toString e.path}`" true
           else
-            withVerbosity 3 (builtins.trace
-              "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${
-                lib.generators.toPretty { } e.value
-              }), ignoring this entry") false
+            trace "channel-discovery" 3
+              "NIX_PATH entry ${e.name} points to path ${e.path} which is not a flox channel (${trace.showValue e.value}), ignoring this entry" false
         else
-          withVerbosity 3 (builtins.trace
-            "NIX_PATH entry ${e.name} points to a path ${e.path} which can't be evaluated successfully, ignoring this entry")
+          trace "channel-discovery" 3 "NIX_PATH entry ${e.name} points to a path ${e.path} which can't be evaluated successfully, ignoring this entry"
           false;
       in result) exprEntries;
-  in withVerbosity 1 (builtins.trace
-    "Found these channel-like entries in NIX_PATH: ${
+  in trace "channel-discovery" 1 "Found these channel-like entries in NIX_PATH: ${
       toString (map (e: e.name) channelEntries)
-    }") channelEntries;
+    }" channelEntries;
 
   channelFloxpkgs = lib.listToAttrs channelFloxpkgsList;
 
@@ -176,7 +173,7 @@ in let
 
   pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
   pregenResult = if builtins.pathExists pregenPath then
-    withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}")
+    trace "pregen" 1 "Reusing pregenerated ${pregenPath}"
     (lib.importJSON pregenPath)
   else
     lib.warn
@@ -193,7 +190,7 @@ in let
   };
 
   outputFun = import ./output.nix {
-    inherit outputFun channelArgs pkgs withVerbosity packageSets utils;
+    inherit outputFun channelArgs pkgs trace packageSets utils;
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
   };
 
@@ -205,6 +202,6 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = (outputFun [ ] myChannelArgs myChannelArgs libraryVersions).outputs;
+  outputs = (outputFun [ ] [ ] myChannelArgs myChannelArgs libraryVersions).outputs;
   channelArguments = myChannelArgs;
 }.${_return}

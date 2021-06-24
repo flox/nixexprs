@@ -1,46 +1,13 @@
 # Returns the auto-generated output of a channel
 # TODO: Add debug logs
-{ pkgs, outputFun, channelArgs, withVerbosity, sourceOverrides, packageSets, utils }:
+{ pkgs, outputFun, channelArgs, trace, sourceOverrides, packageSets, utils }:
 let
   inherit (pkgs) lib;
-
-  # TODO: Better error
-  #redactedError = path: lib.setAttrByPath path (throw "Tried to access redacted path ${lib.concatStringsSep "." path}");
-
-  /*
-  Redacting:
-  - For toplevel, for all package sets and all versions, remove their canonicalPath's and aliasedPath's, and the package sets callScopeAttr
-  - For toplevel additionally remove all toplevelBlacklist's
-
-  Repopulating:
-  - For all allowed package sets,
-    - For toplevel, set callScopeAttr to the set
-    - For toplevel, also use populateToplevel
-  */
-  #redactingSet =
-  #  let
-  #    lists = lib.concatLists (lib.mapAttrsToList (name: value:
-  #      let
-  #        versionSets = lib.concatLists (lib.mapAttrsToList (name: value:
-  #          [ (redactedError value.path) ]# ++ map redactedError value.aliases
-  #        ) value.versions);
-  #      in [ (redactedError [ value.callScopeAttr ]) ] ++ versionSets ++ map redactedError (map lib.singleton (lib.attrNames value.aliases))
-  #    ) packageSets);
-  #    result = mergeSets lists;
-  #  in builtins.trace (toString (lib.attrNames result)) result;
-
-  #toplevelRedactingSet =
-  #  let
-  #    lists = lib.concatLists (lib.mapAttrsToList (name: value:
-  #      map redactedError value.toplevelBlacklist
-  #    ) packageSets);
-  #    result = mergeSets lists;
-  #  in builtins.trace (toString (lib.attrNames result)) result;
 
   # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though
   mergeSets = lib.foldl' lib.recursiveUpdate { };
 
-in parentOverlays: parentArgs: myArgs:
+in importPath: parentOverlays: parentArgs: myArgs: (trace.setContext "importPath" importPath).withContext "channel" myArgs.name (trace:
 let
 
   appVersionTrees = lib.mapAttrs (name: value:
@@ -60,12 +27,12 @@ let
       }
      See dirToAttrs for the fields of <value>
   */
-  packageSetFuns = setName: subpath:
+  packageSetFuns = trace: subpath:
     let
       dir = myArgs.topdir + "/${subpath}";
 
       entries = lib.mapAttrsToList lib.nameValuePair
-        (utils.dirToAttrs (verbosity: message: withVerbosity verbosity (builtins.trace "[channel ${myArgs.name}] [packageSet ${setName}] ${message}")) dir);
+        (utils.dirToAttrs trace dir);
 
       parts = lib.mapAttrs (n: v: lib.listToAttrs v)
         (lib.partition (e: e.value.deep) entries);
@@ -75,9 +42,9 @@ let
       shallow = parts.wrong;
     };
 
-  toplevel =
+  toplevel = trace.withContext "" "toplevel" (trace:
     let
-      funs = packageSetFuns "toplevel" "pkgs";
+      funs = packageSetFuns trace "pkgs";
     in {
       deep = [{
         name = "toplevel";
@@ -90,8 +57,8 @@ let
         defaultTypes = {};
       }];
       shallow = [{
-        # TODO: Nest extraScope, funs, path, libraryVersions under createSet attribute, to indicate that it's used by that function
         name = "toplevel";
+        # TODO: Nest extraScope, funs, path, libraryVersions under createSet attribute, to indicate that it's used by that function
         recurse = true;
         path = [ ];
         extraScope = null;
@@ -99,25 +66,26 @@ let
         libraryVersions = {};
         defaultTypes = {};
       }];
-    };
+    });
 
-  packageSetOutputs = setName: spec:
+  packageSetOutputs = setName: spec: trace.withContext "package-set" setName (trace:
     let
 
-      funs = packageSetFuns setName spec.callScopeAttr;
+      funs = packageSetFuns trace spec.callScopeAttr;
 
       deepOutputs =
         let
-          output = el: lib.optional (el.valueAttrPath == []) {
-            name = setName;
-            inherit (el) path;
-            defaultPath = [ spec.callScopeAttr ];
-            deepOverride = spec.deepOverride;
-            extraScope = spec.callScopeAttr;
-            funs = funs.deep;
-            libraryVersions.${setName} = utils.versionTreeLib.library.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
-            defaultTypes.${setName} = "lib";
-          };
+          output = el:
+            lib.optional (el.valueAttrPath == []) {
+              name = setName;
+              inherit (el) path;
+              defaultPath = [ spec.callScopeAttr ];
+              deepOverride = spec.deepOverride;
+              extraScope = spec.callScopeAttr;
+              funs = funs.deep;
+              libraryVersions.${setName} = utils.versionTreeLib.library.queryDefault el.versionPrefix packageSets.${setName}.versionTree;
+              defaultTypes.${setName} = "lib";
+            };
 
         in lib.concatMap output spec.attrPaths;
 
@@ -134,7 +102,7 @@ let
     in {
       deep = deepOutputs;
       shallow = shallowOutputs;
-    };
+    });
 
   /* A list of entries describing an output set, each of the form
      {
@@ -167,7 +135,6 @@ let
       (getChannelSource importingChannel);
     ownChannel = myArgs.name;
     importingChannel = parentArgs.name;
-    inherit withVerbosity;
   };
 
   allPackageSetVersions = lib.mapAttrs (name: value: lib.attrNames value.versions) packageSets;
@@ -185,7 +152,7 @@ let
       channels.<channel> = <outputs>;
     };
   */
-  versionSetSpecific = utils.memoizeFunctionParameters allPackageSetVersions (libraryVersions:
+  versionSetSpecific = utils.memoizeFunctionParameters trace allPackageSetVersions (libraryVersions: trace.withContext "libraryVersions" libraryVersions (trace:
     let
 
       # Construct a single pkgs for all library versions of a channel
@@ -211,9 +178,7 @@ let
           let
             deepOverlaySet = spec:
               utils.attrs.overlaySet super spec.path (superSet:
-                withVerbosity 5 (builtins.trace "[channel ${myArgs.name}] [path ${
-                    lib.concatStringsSep "." spec.path
-                  }] Creating overriding package set") spec.deepOverride superSet
+                trace "overlay" 5 "Creating overriding package set" spec.deepOverride superSet
                 (createSet spec superSet));
           in mergeSets (map deepOverlaySet outputSpecs.deep);
 
@@ -245,17 +210,16 @@ let
       channels =
         let
           cased = lib.mapAttrs (name: args:
-            outputFun myOverlays myArgs args libraryVersions
+            outputFun (importPath ++ [ myArgs.name ]) myOverlays myArgs args libraryVersions
           ) channelArgs;
 
           lowercased =
             lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) cased;
         in cased // lowercased;
 
-      createSet = spec: super:
-        lib.mapAttrs (pname: value:
+      createSet = spec: super: (trace.setContext "package-set" spec.name).withContext "path" spec.path (trace:
+        lib.mapAttrs (pname: value: trace.withContext "package" pname (trace:
           let
-
             defaultedConfig = lib.mapAttrs (name: pvalue:
               let
                 config = value.config.packageSets.${name} or {};
@@ -288,11 +252,12 @@ let
 
             localMeta = meta // {
               inherit channels;
+              trace = trace.setContext "" "user-trace";
 
               mapDirectory = dir:
                 { call ? path: callPackage path { } }:
                 lib.mapAttrs (name: value: call value.path)
-                (utils.dirToAttrs (verbosity: message: withVerbosity verbosity (builtins.trace "[channel ${myArgs.name}] [mapDirectory ${baseNameOf dir}] ${message}")) dir);
+                (utils.dirToAttrs (trace.setContext "" "mapDirectory") dir);
 
               importNix =
                 { channel ? meta.importingChannel, project, path, ... }@args:
@@ -342,7 +307,7 @@ let
                 alternate = lib.getAttrFromPath (selfAttr ++ [ callScopeAttr ] ++ el.valueAttrPath) alternateAppVersions;
               in
               if el.versionPrefix == [] then
-                passthru
+                trace "redacting" 3 "Allowing access to ${trace.showValue el.path}" passthru
               else if defaultedConfig.${name}.type != "app" then
                 throw ''
                   In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used, which is not allowed.
@@ -365,6 +330,7 @@ let
             ) (lib.attrNames packageSets);
 
             redactingSet = lib.mapAttrs (name: values:
+              trace "redacting" 3 "Redacting attribute ${name} in nixpkgs"
               utils.attrs.updateAttrByPaths (map (el: el // { path = lib.tail el.path; }) values) (localVersions.baseScope.${name} or {})
             ) (lib.groupBy (x: lib.head x.path) (redactingList [ "baseScope" ]));
 
@@ -378,9 +344,9 @@ let
               # like flox.importNix are able to provide a more accurate file location
               _floxPath = value.path;
             } // ownCallPackage value.path { };
-          in withVerbosity 8 (builtins.trace
-            "[channel ${myArgs.name}] [packageSet ${spec.name}] Auto-calling package ${pname}")
-          ownOutput) spec.funs;
+          in trace "redacting" 3 "Redacting set has these toplevel attributes: ${trace.showValue (lib.attrNames redactingSet)}" trace "calling" 8
+            "Auto-calling package ${pname}"
+          ownOutput)) spec.funs);
 
 
 
@@ -389,57 +355,37 @@ let
 
           shallowOutputSet = spec:
             let
-              packageSet = lib.getAttrFromPath spec.path myPkgs;
-
-              outputTrace = source:
-                lib.mapAttrs (name:
-                  builtins.trace "[channel ${myArgs.name}] [path ${
-                    lib.concatStringsSep "." spec.path
-                  }] Output attribute ${name} comes from ${source}");
-
-              shallowOutputs = withVerbosity 7 (outputTrace "shallow output")
-                (createSet spec packageSet);
+              shallowOutputs = createSet spec (lib.getAttrFromPath spec.path myPkgs);
 
               canonicalResult = utils.attrs.hydraSetAttrByPath spec.recurse spec.path
-                (shallowOutputs /*// deepOutputs*/);
+                shallowOutputs;
 
-              #aliasedResult = hydraSetAttrByPath false spec.path
-              #  (lib.getAttrFromPath spec.aliasedPath outputs);
-
-            in canonicalResult;#if spec ? aliasedPath then aliasedResult else canonicalResult;
+            in trace "outputs" 7 (lib.attrNames shallowOutputs) /*[
+              {
+                path = spec.path;
+                value = shallowOutputs;
+              }
+            ];*/
+            canonicalResult;#if spec ? aliasedPath then aliasedResult else canonicalResult;
 
           deepOutputSet = spec:
             let
-              packageSet = lib.getAttrFromPath spec.defaultPath myPkgs;
-
-              outputTrace = source:
-                lib.mapAttrs (name:
-                  builtins.trace "[channel ${myArgs.name}] [path ${
-                    lib.concatStringsSep "." spec.path
-                  }] Output attribute ${name} comes from ${source}");
-
-
               # This "fishes" out the packages that we deeply overlaid out of the resulting package set.
-              deepOutputs = withVerbosity 7 (outputTrace "deep override")
-                (builtins.intersectAttrs spec.funs packageSet);
+              deepOutputs = builtins.intersectAttrs spec.funs (lib.getAttrFromPath spec.defaultPath myPkgs);
 
-            in deepOutputs;
+            in trace "outputs" 7 (lib.attrNames deepOutputs) deepOutputs;
 
-          message = "Got shallow output spec paths: ${
-            lib.concatMapStringsSep ", " (spec: lib.concatStringsSep "." spec.path)
-            outputSpecs.shallow
-          }";
           shallowOutputs = map shallowOutputSet (lib.filter (x: x.funs != {}) outputSpecs.shallow);
           deepOutputs = map deepOutputSet (lib.filter (x: x.funs != {}) outputSpecs.deep);
           result = mergeSets (deepOutputs ++ shallowOutputs);
-        in withVerbosity 6 (builtins.trace message) result;
+        in result;
 
-      baseScope = utils.attrs.smartMerge (verbosity: message: withVerbosity verbosity (builtins.trace "[channel ${myArgs.name}] ${message}")) (myPkgs // myPkgs.xorg) outputs;
+      baseScope = utils.attrs.smartMerge trace (myPkgs // myPkgs.xorg) outputs;
 
     in {
       pkgs = myPkgs;
       inherit channels outputs baseScope;
-    });
+    }));
 
     /*
     - When e.g. python3Packages is used from the arguments, and python 3 isn't the default version, give a warning
@@ -455,10 +401,7 @@ let
       The only inferred thing is e.g. python.type = "lib" from pythonPackages/*
 
     - Don't give any warnings/errors when accessing python3Packages from channel output
-    - Only add the hydra recursion at the end and for root
+    - Only add the hydra recursion at the end and for roo
     */
 
-
-in withVerbosity 3 (builtins.trace
-  ("[channel ${myArgs.name}] Evaluating, being imported from ${parentArgs.name}"))
-versionSetSpecific
+in trace "channel" 3 "Evaluating, being imported from ${parentArgs.name}" versionSetSpecific)
