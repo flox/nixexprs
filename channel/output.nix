@@ -139,6 +139,8 @@ let
 
   allPackageSetVersions = lib.mapAttrs (name: value: lib.attrNames value.versions) packageSets;
 
+  versionSetSpecific = trace: libraryVersions: trace "channel" 3 "versionSetSpecific called with libraryVersions ${trace.showValue libraryVersions}" versionSetSpecific' libraryVersions;
+
   /* The outputs of each channel as imported by this channel.
 
      This calls this very function of this file (outputFun) again, but with this
@@ -152,7 +154,7 @@ let
       channels.<channel> = <outputs>;
     };
   */
-  versionSetSpecific = utils.memoizeFunctionParameters trace allPackageSetVersions (libraryVersions: trace.withContext "libraryVersions" libraryVersions (trace:
+  versionSetSpecific' = utils.memoizeFunctionParameters trace allPackageSetVersions (libraryVersions: trace.withContext "libraryVersions" libraryVersions (trace:
     let
 
       # Construct a single pkgs for all library versions of a channel
@@ -210,7 +212,7 @@ let
       channels =
         let
           cased = lib.mapAttrs (name: args:
-            outputFun (importPath ++ [ myArgs.name ]) myOverlays myArgs args libraryVersions
+            outputFun (importPath ++ [ myArgs.name ]) myOverlays myArgs args (trace.setContext "caller" "channel") libraryVersions
           ) channelArgs;
 
           lowercased =
@@ -248,7 +250,7 @@ let
               utils.attrs.updateAttrByPaths (redactingList [ "channels" channel "outputs" ]) channelValue.outputs
             ) localVersions.channels;
 
-            localVersions = versionSetSpecific packageSetVersions;
+            localVersions = versionSetSpecific (trace.setContext "caller" "localVersions") packageSetVersions;
 
             localMeta = meta // {
               inherit channels;
@@ -280,7 +282,7 @@ let
                 localVersions.baseScope
                 redactingSet
               ]
-              ++ lib.optional (spec.extraScope != null) localVersions.baseScope.${spec.extraScope}
+              #++ lib.optional (spec.extraScope != null) localVersions.baseScope.${spec.extraScope}
               ++ lib.optional isOwn
                 {
                   ${pname} = super.${pname} or (throw
@@ -301,11 +303,12 @@ let
                 stringVersionPrefix = lib.concatStringsSep "." el.versionPrefix;
                 genericPath = lib.optional (el.valueAttrPath != [] && spec.extraScope != callScopeAttr) callScopeAttr ++ el.valueAttrPath;
 
-                alternateAppVersions = versionSetSpecific (packageSetVersions // {
+                alternateAppVersions = versionSetSpecific (trace.setContext "caller" "alternateAppVersions") (packageSetVersions // {
                   ${name} = utils.versionTreeLib.core.queryDefault el.versionPrefix appVersionTrees.${name};
                 });
                 alternate = lib.getAttrFromPath (selfAttr ++ [ callScopeAttr ] ++ el.valueAttrPath) alternateAppVersions;
               in
+              trace "redact" 0 "Redacting ${name} in ${lib.concatStringsSep "." selfAttr}, with element ${trace.showValue el}" (
               if el.versionPrefix == [] then
                 trace "redacting" 3 "Allowing access to ${trace.showValue el.path}" passthru
               else if defaultedConfig.${name}.type != "app" then
@@ -320,7 +323,7 @@ let
               else
                 lib.warn ''
                   In ${value.path}, the attribute ${lib.concatStringsSep "." el.path} is used when it shouldn't.
-                  to use ${name} version ${stringVersionPrefix}, set packagesets.${name}.app.version = "${stringVersionPrefix}"'' alternate;
+                  to use ${name} version ${stringVersionPrefix}, set packagesets.${name}.app.version = "${stringVersionPrefix}"'' alternate);
 
             redactingList = selfAttr: lib.concatMap (name:
               map (el: {
@@ -334,9 +337,9 @@ let
               utils.attrs.updateAttrByPaths (map (el: el // { path = lib.tail el.path; }) values) (localVersions.baseScope.${name} or {})
             ) (lib.groupBy (x: lib.head x.path) (redactingList [ "baseScope" ]));
 
-            ownCallPackage = utils.scopeList.callPackageWith (createScopes true);
+            ownCallPackage = utils.scopeList.callPackageWith trace (createScopes true);
 
-            callPackage = utils.scopeList.callPackageWith (createScopes false);
+            callPackage = utils.scopeList.callPackageWith trace (createScopes false);
 
             ownOutput = {
               # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`

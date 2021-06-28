@@ -1,11 +1,17 @@
 { lib ? import <nixpkgs/lib> }: {
 
-  callPackageWith = autoArgs: fn: args:
+  callPackageWith = trace: autoArgs: fn: args:
     let
       f = if lib.isFunction fn then fn else import fn;
       funArgs = lib.functionArgs f;
-      auto = lib.foldl' (scope: args: scope // builtins.intersectAttrs funArgs args) {} autoArgs;
-    in lib.makeOverridable f (auto // args);
+      auto = lib.foldl' ({ index, scope }: args:
+        let attrs = builtins.intersectAttrs funArgs args;
+        in trace "callPackageWith" 4 "Attributes ${trace.showValue (lib.attrNames attrs)} come from index ${toString index}" {
+          index = index + 1;
+          scope = scope // attrs;
+        }
+      ) { index = 0; scope = {}; } autoArgs;
+    in lib.makeOverridable f (auto.scope // args);
 
   #callPackage = scopes: resolve: f: args:
   #  let

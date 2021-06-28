@@ -202,6 +202,6 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = (outputFun [ ] [ ] myChannelArgs myChannelArgs libraryVersions).outputs;
+  outputs = (outputFun [ ] [ ] myChannelArgs myChannelArgs (trace.setContext "caller" "root") libraryVersions).outputs;
   channelArguments = myChannelArgs;
 }.${_return}
