@@ -1,0 +1,202 @@
+Problem: There are python packages that depend on perl. In general, anything can depend on any number of package sets.
+
+We need a way to specify definitions of top-level packages, python packages, etc. all to be version agnostic over every package set they depend on
+
+But the user of these packages will have to have a way to specify the versions of each of those packages
+
+We could solve this by ensuring that each package can only be used within the package sets they use.
+
+So e.g. if pkgs/foo.nix depends on python and perl, only make it usable in e.g. python3Packages _and_ perl530Packages (but how??)
+
+No, we just need to propagate the package sets
+
+E.g. if pkgs/foo.nix depends on python and perl, its definition should be agnostic over any python/perl version
+But when pkgs/bar.nix depends on python/perl, the python/perl version is matched between them, no matter what it is
+
+We could enforce this via overlays: Only pythonPackages, _not_ python3Packages is available, same for perl, in all files
+
+But how can we choose a version in the end then?
+
+nix-build -A foo --argstr python 3 --argstr perl 5.30
+
+
+We can have multiple levels of selecting versions:
+- There can be a file pkgs/foo/config.nix with contents { python = "3"; }
+- A channel can select a default with default.nix containing { config.python = "3"; }
+
+We might have multiple python versions for a single package, because it might depend on an executable that uses python itself, but doesn't need to propagate its python packages
+
+So we only need to specify a version at "propagation boundaries"
+
+We can use toPythonModule/toPerlModule to recognize this, I think
+
+
+
+If packages specify python = "3" in config.nix, it means they need that version and that they aren't propagating python packages (E.g. it's an application)
+
+If packages don't specify that, they will be built for all supported python versions by CI.
+And if used as a dependency, the dependent needs to specify the version (or any dependency parent of it)
+
+But how do we know whether a package uses python/perl?
+- We could try to inspect function arguments, looking for pythonPackages and python
+- Or we could make packages specify in config.nix that they use python.
+  E.g. it could be `{ python = {}; }` for any python version or `{ python.version = "3"; }`
+
+What if packages in general could indicate support for certain versions (like buildPythonPackage's disabled attribute)
+
+Maybe that should be separate from an application selecting a python version
+
+{
+
+  # Indicates that python is needed, makes pythonPackages/python available
+  python = {
+
+    # Indicates that the python version isn't propagated, is an application
+    # "Closes off" a python module tree
+    isApp = true;
+    # By default false for pythonPackages/*, no default for pkgs/*
+    # Safe default is false, meaning it propagates python modules
+    # Could false work for everything?
+    # Users need to create config.nix anyways if they want access to python,
+    # so let them also specify whether it's an application or a module
+
+
+    # For a library this would indicate that
+    #supportsVersion = {
+    #  "3" = true;
+    #  "3.8" = false;
+    #};
+    # What about pypy
+
+  };
+
+}
+
+
+
+
+In the end we need a function that takes a config.nix and creates a scope from that
+
+The config.nix needs to be passed to imported channels so they can provide the correct versions of non-applications
+
+For creating a scope, for package sets where isApp = true, create a new scope for that package set from the provided version. Otherwise inherit from the importing channel
+
+What if we have no importing channel, aka we are the root channel? Generate both a default attribute, and an attribute for each supported version
+
+
+Each channel should have thunks for every combination of every package set version
+
+Channel output is:
+-
+- Top-level packages + "-python3.8"
+- python38Packages.foo-perl530
+
+
+
+The only differences between pkgs/* and pythonPackages/* is that:
+- pythonPackages/* are in pythonPackages.* attribute in output
+- pythonPackages/* have a default of python.isApp = false, giving access to pythonPackages and python by default
+- pythonPackages itself is added to the main scope
+
+
+
+
+Does a compiled language like Haskell require the same?
+
+What if a package is both a library and an application?
+
+
+{
+  # What to do if both are specified?
+  # Probably library should be preferred
+  python.application.version = "3";
+  python.library = {};
+}
+
+^^ Don't allow this, we need to choose either application or package, makes life easier
+If both are needed, let the user specify pythonPackages/foo and pkgs/foo separately
+
+{
+  packageSets = {
+    python.type = "lib";
+    perl.type = "app";
+    perl.app.version = "5.30";
+  };
+  deepOverride = true;
+}
+
+
+Each channel has access to other channels via
+
+<channel>."python-<version>/perl-<version>".<package>
+           ^^ Specifies library versions
+
+
+
+
+Only the root channel should be influenced by the default versions:
+- Any library packages in the root channel will use those versions
+- pythonPackages.* will refer to the default version
+
+Default versions can be changed with:
+- The channels default.nix file, with `packageSets.python.version = "3"`
+- --argstr python 3
+- --arg packageSets '{ python.version = "3"; }'
+- There's also a global default for when neither of the above are set
+- We can also create a `with.python."3"` attribute which contains all the outputs but with a different default python version
+  Should this be available from other channels? No, because it can mess with versions
+  nix-build -A with.python-3.foo
+
+Versions are determined according to the existing aliases/longest prefix
+- If version = "3", then python3Packages.python.version is the actual version
+- "3.10" -> python310Packages.python.version
+- "3.10.0" -> "3.10.0a5"
+
+Hydra should build all supported versions
+
+For package sets we should also have the normal aliases and multiple versions
+So python3Packages should still refer to the default python 3 version python packages, essentially with.python."3".pythonPackages
+And the same for other sets. This allows building certain versions easily and similarly to nixpkgs
+
+nix-build -A lib-despython --argstr python 3
+
+We need to extend the package-sets.nix to also capture which attributes in the toplevel set need to be made unavailable
+
+
+
+Configurations:
+
+In channels root default.nix:
+
+  import <flox/channel> {
+    topdir = ./.;
+
+    # Only when building this channel as root, this specifies the versions of package sets to use for libraries
+    # Defaults to nixpkgs defaults
+    libraryVersions = {
+      python = "3";
+    };
+  }
+
+In package definitions config.nix:
+
+  {
+    packageSets = {
+      # Gives access to pythonPackages and co.
+      python = {
+        # Says that this is an application, aka it doesn't export any python modules
+        type = "app";
+        # Specifies the Python version for this application
+        app.version = "3";
+      };
+    };
+    # deep-override replacement
+    deepOverride = true;
+  }
+
+
+
+
+
+
+
