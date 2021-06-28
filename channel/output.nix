@@ -300,7 +300,14 @@ let
             in {
               # flox edit should edit the path specified here
               _floxPath = fullPath;
-            } // ownCallPackage fullPathChecked { };
+              # If we're evaluating for a _floxPath, only let the result of an
+              # importNix call influence the _floxPath with a _floxPathDepth
+              # greater or equal to 2
+              # Note that technically we could pass a nested importNix into the
+              # scope which increases the depth by one more, though this
+              # doesn't seem to be very beneficial in most cases
+            } // lib.optionalAttrs (myArgs._floxPathDepth >= 2)
+            (ownCallPackage fullPathChecked { });
         };
 
         # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
@@ -328,7 +335,11 @@ let
           # Note that we let the callPackage result override this because builders
           # like flox.importNix are able to provide a more accurate file location
           _floxPath = value.path;
-        } // ownCallPackage value.path { };
+          # If we're evaluating for a _floxPath, only let the result of an
+          # package call influence the _floxPath with a _floxPathDepth
+          # greater or equal to 1
+        } // lib.optionalAttrs (myArgs._floxPathDepth >= 1)
+          (ownCallPackage value.path { });
       in withVerbosity 8 (builtins.trace
         "[channel ${myArgs.name}] [packageSet ${spec.name}] Auto-calling package ${pname}")
       ownOutput);
