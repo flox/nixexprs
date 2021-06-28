@@ -7,6 +7,11 @@
 , sourceOverrideJson ? "{}", _return ? "outputs"
   # Used to detect whether this default.nix is a channel (by inspecting function arguments)
 , _isFloxChannel ? throw "This argument isn't meant to be accessed"
+  # When evaluating for an attributes _floxPath, passing a lower number in
+  # this argument allows for still getting a result in case of failing
+  # evaluation, at the expense of a potentially less precise result. The
+  # highest number not giving evaluation failures should be used
+, _floxPathDepth ? 2
   # Allow passing other arguments for nixpkgs pkgs/top-level/release-lib.nix compatibility
 , ... }@args:
 let topdir' = topdir;
@@ -114,7 +119,10 @@ in let
     "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}")
   firstSuccess.success;
 
-  myChannelArgs = { inherit name topdir extraOverlays args; };
+  myChannelArgs = {
+    inherit name topdir extraOverlays;
+    inherit _floxPathDepth;
+  };
 
   # List of { name, path, value } entries of channels found in NIX_PATH
   # Searches through both prefixed and non-prefixed paths in NIX_PATH
