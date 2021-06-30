@@ -40,8 +40,8 @@ let
         in pos.file + ":" + toString pos.line
       }"
       + " a source override was specified, which also requires a `version = ` to be assigned."));
-    versionSuffix = overrides.versionSuffix or "";
-    extraInfo = overrides.extraInfo or { };
+    versionSuffix = "";
+    extraInfo = { };
   };
 
   metaComponents = let
@@ -106,22 +106,29 @@ let
     });
 
     # We assume that both .version and .revision exist in gitHashInfo
-    origversion = overrides.version or gitHashInfo.version;
-    versionSuffix =
-      overrides.versionSuffix or "-r${toString gitHashInfo.revision}";
-    extraInfo = overrides.extraInfo or { } // {
-      inherit (gitHashInfo) url rev sha256 date;
-    };
+    origversion = gitHashInfo.version;
+    versionSuffix = "-r${toString gitHashInfo.revision}";
+    extraInfo = { inherit (gitHashInfo) url rev sha256 date; };
   };
 
-  # Determine which components to use by prioritizing `--argstr sourceOverrideJson`
-  # over override arguments over `<$channel-meta/srcs>`
-  components = if channelSourceOverrides ? ${project} then
-    channelOverrideComponents
-  else if overrides ? src then
-    argumentOverrideComponents
-  else
-    metaComponents;
+  components = let
+    # Determine which components to use by prioritizing `--argstr sourceOverrideJson`
+    # over override arguments over `<$channel-meta/srcs>`
+    original = if channelSourceOverrides ? ${project} then
+      channelOverrideComponents
+    else if overrides ? src then
+      argumentOverrideComponents
+    else
+      metaComponents;
+
+    # But let the user override all of them
+    final = original // {
+      # Small exception: The version gets mapped to origversion
+      origversion = overrides.version or original.origversion;
+      versionSuffix = overrides.versionSuffix or original.versionSuffix;
+      extraInfo = original.extraInfo // overrides.extraInfo or { };
+    };
+  in final;
 
   # The resulting attributes
   result = rec {
@@ -129,7 +136,7 @@ let
     inherit (components) src origversion;
     pname = overrides.pname or project;
     version = components.origversion + components.versionSuffix;
-    name = pname + "-" + version;
+    name = overrides.name or (pname + "-" + version);
   };
 
   infoJson = builtins.toJSON (removeAttrs result [ "src" ] // {
