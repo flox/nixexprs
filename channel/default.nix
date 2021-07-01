@@ -132,21 +132,32 @@ in let
     inherit _floxPathDepth;
   };
 
-  closure = builtins.genericClosure {
-    startSet = [{
-      key = name;
-      inherit name;
-      value = myChannelArgs;
-    }];
-    operator = entry: map (name: {
-      key = name;
-      inherit name;
-      value = import (builtins.findFile builtins.nixPath name) {
+  closure =
+    let
+      root = {
+        key = name;
+        value = myChannelArgs;
+      };
+
+      getChannel = name: import (builtins.findFile builtins.nixPath name) {
         inherit name;
         _return = "channelArguments";
       };
-    }) entry.value.dependencies;
-  };
+
+      operator = entry: map (name:
+        if name == "nixpkgs"
+        then throw "Channel ${entry.key} has \"nixpkgs\" specified as a dependency, which is not necessary"
+        else {
+          key = name;
+          value = getChannel name;
+        }
+      ) entry.value.dependencies;
+
+      result = builtins.genericClosure {
+        startSet = [ root ];
+        operator = operator;
+      };
+    in result;
 
   dependencyGraph = pkgs.runCommandNoCC "floxpkgs-${name}-dependency-graph" {
     graph = ''
@@ -154,17 +165,23 @@ in let
         "${name}" [shape=box];
       ${lib.concatMapStrings (entry:
         lib.concatMapStrings (dep:
-          "  \"${entry.name}\" -> \"${dep}\";\n"
+          "  \"${entry.key}\" -> \"${dep}\";\n"
         ) entry.value.dependencies
       ) closure}}
     '';
     passAsFile = [ "graph" ];
     nativeBuildInputs = [ pkgs.graphviz ];
   } ''
-    dot -Tpng "$graphPath" -Gdpi=300 -o $out
+    mkdir -p "$out"
+    mv "$graphPath" "$out/graph.dot"
+    dot -Tpng "$out/graph.dot" -Gdpi=250 -o "$out/graph.png"
+    cat <<EOF > $out/view
+    #!${pkgs.runtimeShell}
+    export PATH=${lib.makeBinPath [ pkgs.xdot pkgs.graphviz ]}
+    exec xdot $out/graph.dot
+    EOF
+    chmod +x $out/view
   '';
-
-  allChannels = builtins.listToAttrs closure;
 
   #importChannelSrc = name: fun:
   #  fun {
@@ -238,6 +255,8 @@ in let
 
     in result;
 
+  rootChannel = name;
+
   /* Imports all directories and Nix files of the given package directory subpath. Returns
       {
         # For attributes that have { deep = true; } in their package directory (doesn't work for files)
@@ -253,45 +272,68 @@ in let
   */
   packageSetFuns = setName: subpath:
     let
-      #dir = myArgs.topdir + "/${subpath}";
+      # [{ channel, name, value }]
+      entries =
+        let
+          f = entry:
+            let
+              fun = name: value: {
+                inherit (value) deep;
+                inherit name;
+                value = {
+                  channel = entry.key;
+                  path = value.path;
+                };
+              };
+              attrs = dirToAttrs "[channel ${entry.key}] [packageSet ${setName}]" (entry.value.topdir + "/${subpath}");
+            in
+              lib.mapAttrsToList fun attrs;
 
-      #entries = lib.mapAttrsToList lib.nameValuePair
-      #  (dirToAttrs "packageSet ${setName}" dir);
+          result = lib.concatMap f closure;
+          split = lib.partition (entry: entry.deep) result;
+        in split;
 
-      # { <channel> = { <name> = <entry>; }; }
-      #entries = lib.mapAttrs (name: args:
-      #  dirToAttrs "[channel ${name}] [packageSet ${setName}]" args.topdir
-      #) allChannels;
-      # flip
-      # => { <name> = { <channel> = <entry>; }; }
-      # resolve
-      # => { <name> = <entry>; }
-      # deep-partition
+      deep = lib.filterAttrs (name: value: value != null) (lib.mapAttrs resolve (lib.groupBy (entry: entry.name) entries.right));
+      shallow = lib.mapAttrs (name: lib.listToAttrs) (lib.groupBy (entry: entry.value.channel) entries.wrong);
 
-      # [ { channel = ...; name = ...; value = <entry>; } ]
-      entries = lib.concatMap (entry:
-        lib.mapAttrsToList (name: value: {
-          channel = entry.name;
-          inherit name;
-          value = value // {
-            channel = entry.name;
-          };
-        }) (dirToAttrs "[channel ${name}] [packageSet ${setName}]" (entry.value.topdir + "/${subpath}"))
-      ) closure;
+      # TODO: Move to channels root default.nix
+      # If multiple channels define the same package, this channel should use the one from the channel specified here
+      conflictResolution = {
+        pkgs.kerberos = "systems";
+        pkgs.hello = "infinisil";
+        pythonPackages.requests = "nixpkgs";
+      };
 
-      resolve = name: entries: if lib.length entries > 1 then throw "You need to resolve entry ${name}" else builtins.trace "No need to resolve entry ${name}, it only occurs in ${(lib.head entries).channel}" (lib.head entries);
-
-      # { <name> = <entry>; }
-      resolved = lib.mapAttrsToList resolve (lib.groupBy (entry: entry.name) entries);
-
-
-      parts = lib.mapAttrs (n: v: lib.listToAttrs (map (e: e // { value = { inherit (e.value) channel path; }; }) v))
-        (lib.partition (e: e.value.deep) resolved);
+      # This is specifically for deep overrides
+      resolve = name: entries:
+        let
+          singleEntry = lib.head entries;
+          ownEntry = lib.findFirst (entry: entry.value.channel == rootChannel) null entries;
+          wants = conflictResolution.pkgs.${name};
+          resolved = lib.findFirst (entry: entry.value.channel == wants) null entries;
+        in
+        # Deeply overriding packages that don't exist in nixpkgs doesn't make much sense,
+        # and it's also unsafe, because nixpkgs can change behavior depending on the presence of an attribute,
+        # without accessing the value itself (in which we could throw an error that conflict resolution is needed)
+        if ! pkgs ? ${name} then throw "Can't deeply override an attribute (\"${name}\") that doesn't exist in nixpkgs"
+        # No need to resolve conflict if we specified it in our own channel
+        else if ownEntry != null then ownEntry.value
+        # If a conflict resolution value was provided
+        else if conflictResolution ? pkgs.${name} then
+          # If we want nixpkgs, return null, so this package gets ignored, allowing the one from nixpkgs to take precedence
+          if wants == "nixpkgs" then null
+          # If it's not nixpkgs, but we can't find the specified value
+          else if resolved == null then throw "conflictResolution specified ${wants} for ${name}, but that doesn't exist. Options are [ nixpkgs, ${lib.concatMapStringsSep ", " (entry: entry.value.channel) entries} ]"
+          # Otherwise, return the found value
+          else resolved.value
+        # If we have more entries, throw an error that the conflict needs to be resolved
+        else throw "conflictResolution needs to be provided for ${name}. Options are [ nixpkgs, ${lib.concatMapStringsSep ", " (entry: entry.value.channel) entries} ]";
 
     in {
-      deep = parts.right;
-      shallow = parts.wrong;
+      inherit deep shallow;
     };
+
+
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
