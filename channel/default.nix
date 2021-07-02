@@ -270,7 +270,7 @@ in let
       }
      See dirToAttrs for the fields of <value>
   */
-  packageSetFuns = setName: subpath:
+  packageSetFuns = prefix: subpath:
     let
       # [{ channel, name, value }]
       entries =
@@ -285,7 +285,7 @@ in let
                   path = value.path;
                 };
               };
-              attrs = dirToAttrs "[channel ${entry.key}] [packageSet ${setName}]" (entry.value.topdir + "/${subpath}");
+              attrs = dirToAttrs "[channel ${entry.key}] [packageSet ${subpath}]" (entry.value.topdir + "/${subpath}");
             in
               lib.mapAttrsToList fun attrs;
 
@@ -293,51 +293,60 @@ in let
           split = lib.partition (entry: entry.deep) result;
         in split;
 
-      deep = lib.filterAttrs (name: value: value != null) (lib.mapAttrs resolve (lib.groupBy (entry: entry.name) entries.right));
-      shallow = lib.mapAttrs (name: lib.listToAttrs) (lib.groupBy (entry: entry.value.channel) entries.wrong);
+      # Note: These are attributes potentially containing a null value, in which case the ones from nixpkgs should be propagated
+      # We don't want to filter out the null's because that causes it to be strict
+      deep = lib.mapAttrs (resolve true) (lib.groupBy (entry: entry.name) entries.right);
+      shallow = lib.mapAttrs (resolve false) (lib.groupBy (entry: entry.name) entries.wrong);
 
       # TODO: Move to channels root default.nix
       # If multiple channels define the same package, this channel should use the one from the channel specified here
       conflictResolution = {
         pkgs.kerberos = "systems";
         pkgs.hello = "infinisil";
+        pkgs.gnupg = "infinisil";
+        pkgs.dotfiles = "flox-examples";
         pythonPackages.requests = "nixpkgs";
       };
 
-      # This is specifically for deep overrides
-      resolve = name: entries:
+      resolve = overridesNixpkgs: name: entries:
         let
-          singleEntry = lib.head entries;
+          path = prefix ++ [ name ];
           ownEntry = lib.findFirst (entry: entry.value.channel == rootChannel) null entries;
-          wants = conflictResolution.pkgs.${name};
+          wants = conflictResolution.${subpath}.${name};
           resolved = lib.findFirst (entry: entry.value.channel == wants) null entries;
+          existsInNixpkgs = lib.hasAttrByPath path pkgs;
+          opts = lib.optional existsInNixpkgs "nixpkgs" ++ map (entry: entry.value.channel) entries;
+          options = "Options are [ ${lib.concatStringsSep ", " opts} ]";
         in
         # Deeply overriding packages that don't exist in nixpkgs doesn't make much sense,
         # and it's also unsafe, because nixpkgs can change behavior depending on the presence of an attribute,
         # without accessing the value itself (in which we could throw an error that conflict resolution is needed)
-        if ! pkgs ? ${name} then throw "Can't deeply override an attribute (\"${name}\") that doesn't exist in nixpkgs"
+        if overridesNixpkgs && ! existsInNixpkgs then throw "Can't deeply override an attribute (${lib.concatStringsSep "." path}) that doesn't exist in nixpkgs"
         # No need to resolve conflict if we specified it in our own channel
         else if ownEntry != null then ownEntry.value
         # If a conflict resolution value was provided
-        else if conflictResolution ? pkgs.${name} then
+        else if conflictResolution ? ${subpath}.${name} then
           # If we want nixpkgs, return null, so this package gets ignored, allowing the one from nixpkgs to take precedence
-          if wants == "nixpkgs" then null
+          if wants == "nixpkgs" then
+            if ! existsInNixpkgs
+            then throw "conflictResolution specified ${wants} for ${subpath}.${name}, but that doesn't exist. ${options}"
+            else null
           # If it's not nixpkgs, but we can't find the specified value
-          else if resolved == null then throw "conflictResolution specified ${wants} for ${name}, but that doesn't exist. Options are [ nixpkgs, ${lib.concatMapStringsSep ", " (entry: entry.value.channel) entries} ]"
+          else if resolved == null then throw "conflictResolution specified ${wants} for ${subpath}.${name}, but that doesn't exist. ${options}"
           # Otherwise, return the found value
           else resolved.value
+        else if ! existsInNixpkgs && lib.length entries == 1 then (lib.head entries).value
         # If we have more entries, throw an error that the conflict needs to be resolved
-        else throw "conflictResolution needs to be provided for ${name}. Options are [ nixpkgs, ${lib.concatMapStringsSep ", " (entry: entry.value.channel) entries} ]";
+        else throw "conflictResolution needs to be provided for ${subpath}.${name}. ${options}";
 
     in {
       inherit deep shallow;
     };
 
-
-
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = packageSetFuns "toplevel" "pkgs";
+  outputs = packageSetFuns [] "pkgs";
+  #outputs = packageSetFuns [ "pythonPackages" ] "pythonPackages";
   inherit dependencyGraph;
   channelArguments = myChannelArgs;
 }.${_return}
