@@ -236,3 +236,7 @@ The root channel needs to compute the full closure, and then pass it down to all
 What if we depend on an attribute from an indirect, but transitively included channel, and that channel removes the attribute we used. That's no good! We should try to enforce that we can only use direct dependencies attributes.
 
 For determining the extends, limit the global full closures package sets to the channels immediate dependencies. Only require conflict resolution if it's not unique, and no resolution has been provided
+
+
+Should we bother ensuring that only direct deps can be used? Not doing so could suddenly break channels if attributes are removed.
+Probably not, since it's not efficiently doable

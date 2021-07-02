@@ -409,65 +409,128 @@ in let
   result = lib.mapAttrs (setName: packageSet: lib.mapAttrs (version: versionInfo: packageSetFuns setName versionInfo.canonicalPath) packageSet.versions)packageSets;
 
 
-  dependencyAttrs = removeAttrs (lib.genAttrs dependencies (name: name)) [ name ] // { nixpkgs = null; };
 
-  # Takes a set of the form { <packageSet>.<pname>.<channel> = null; },
-  # indicating which channels have such an attribute
-  ownEntries = closureEntries: lib.mapAttrs (setName: packageSet:
+
+  /*
+  ## Package specifications
+
+  A package specification is a structure containing all the necessary
+  information of a package for it to be usable by a dependent channel.
+
+  It contains these fields
+
+  {
+    # Whether this package should be deeply overridden. If true, this
+    # causes it to be injected into nixpkgs via an overlay
+    deep = <bool>;
+
+    # Which channel (or nixpkgs), if any, this package is extended from. When the
+    # same package attribute is used in the expression as an argument, this
+    # is the channel it refers to
+    extends = null | "nixpkgs" | <channel>;
+
+    # The path to the package expression
+    exprPath = <path>;
+  }
+  */
+
+  # The dependencies of this channel, in the form { <channel> = null; }
+  # Includes nixpkgs, doesn't include own channel
+  dependencyAttrs = removeAttrs (lib.genAttrs dependencies (name: null)) [ name ] // {
+    nixpkgs = null;
+  };
+
+  /*
+  Returns all the package specifications in our own channel. To determine the
+  `extends` fields for each package, it is necessary to know which other
+  channels provide the same package, which is why this function takes a
+  `packageChannels` argument. This argument is passed by the root channel, in
+  order to not duplicate the work of determining its value.
+  */
+  ownPackageSpecs = packageChannels: lib.mapAttrs (setName: packageSet:
     lib.mapAttrs (pname: value: {
-      anchor = if value.deep then "nixpkgs" else "floxpkgs";
-      # According to my closure, which channel should I override?
+      deep = value.deep;
+      exprPath = value.path;
       extends =
         let
-          # closure entries at least contains this package
-          attrs = builtins.intersectAttrs dependencyAttrs closureEntries.${setName}.${pname};
+          # Since we got the packageChannels from the root channel to share
+          # work, we will however also have a potential superset of only our
+          # own dependencies. We don't want non-dependencies to influence
+          # which channel we extend from though, so we limit the channels
+          # that contain the same package to the ones we depend on
+          # Note that we only allow immediate dependencies here because ideally
+          # a channel would not depend on transitive attributes
+          attrs = lib.attrNames (builtins.intersectAttrs dependencyAttrs packageChannels.${setName}.${pname});
           result =
-            if attrs == {} then "nixpkgs"
-            else if conflictResolution ? ${setName}.${pname} then
-              let value = conflictResolution.${setName}.${pname}; in
-              if attrs ? ${value} then value
-              else throw "Super conflict resolution pointed to channel ${value} which is either not available or not in the direct deps ${toString (lib.attrNames attrs)}"
-            else if lib.length (lib.attrNames attrs) == 1 then lib.head (lib.attrNames attrs)
-            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${name}, ${toString (lib.attrNames attrs)}";
-        in if result == "nixpkgs" then null else result;
-      exprPath = value.path;
+            # If this channel specifies a conflict resolution for this package, use that directly
+            if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname}
+            # Otherwise, if no channel (or nixpkgs) has this attribute, we can't extend from anywhere
+            else if lib.length attrs == 0 then null
+            # But if there's only a single channel (or nixpkgs) providing it, we use that directly, no need for conflict resolution
+            else if lib.length attrs == 1 then lib.head attrs
+            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${name}, ${toString attrs}";
+        in result;
     }) (dirToAttrs setName (topdir + "/${setName}"))
   ) packageSets;
 
 
-  # { <channel>.<packageSet>.<pname> = { ... }; }
-  global = lib.listToAttrs (map (entry:
-    {
-      name = entry.key;
-      value = import entry.value.topdir {
-        _return = "ownEntries";
-      } perChannel;
-    }
-  ) closure);
+  /*
+  Gives a package specification for each package in each channel.
 
-  perChannel = lib.mapAttrs (setName: packageSet:
+  {
+    <channel>.<packageSet>.<pname> = <package specification>;
+  }
+  */
+  channelPackageSpecs = lib.listToAttrs (map (entry: {
+    name = entry.key;
+    # Gets the package specs of each channel, passing it the packageChannels
+    # evaluated from the root channel to share work
+    value = import entry.value.topdir { _return = "ownPackageSpecs"; } packageChannels;
+  }) closure);
+
+  /*
+  Lists all channels (including nixpkgs) that contain a given package
+
+  This value is passed to all TODO functions in all channels for them to be
+  able to efficiently decide the `extends` of all the channels packages.
+
+  This is later also going to be used by the root channel to decide where to
+  get packages from.
+
+  {
+    <packageSet>.<pname> = {
+      # Only if nixpkgs contains this package
+      nixpkgs = null;
+      # For all the channels that contain this package
+      <channel> = null;
+    };
+  }
+  */
+  packageChannels = lib.mapAttrs (setName: packageSet:
     let
-      a = lib.concatMap (channel:
-        let packages = global.${channel}.${setName}; in
+      packages = lib.concatMap (channel:
         lib.mapAttrsToList (pname: value: {
-          inherit pname channel;
-        }) packages
-      ) (lib.attrNames global);
+          inherit pname;
+          name = channel;
+          value = null;
+        }) channelPackageSpecs.${channel}.${setName}
+      ) (lib.attrNames channelPackageSpecs);
 
-      grouped = lib.mapAttrs (name: values:
-        lib.genAttrs (map (x: x.channel) values) (x: null) // lib.optionalAttrs (pkgs ? ${setName}.${name}) {
+      result = lib.mapAttrs (name: values:
+        lib.listToAttrs values
+        # Note that this relies on the fact that pkgs ? x == pkgs.pkgs ? x
+        // lib.optionalAttrs (pkgs ? ${setName}.${name}) {
           nixpkgs = null;
         }
-      ) (lib.groupBy (x: x.pname) a);
-
-    in grouped
+      ) (lib.groupBy (p: p.pname) packages);
+    in result
   ) packageSets;
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = global;
-  inherit ownEntries;
-  inherit perChannel;
+  outputs = channelPackageSpecs;
+  inherit ownPackageSpecs;
+  inherit packageChannels;
   inherit packageSets;
   #outputs = packageSetFuns [ "pythonPackages" ] "pythonPackages";
   inherit dependencyGraph;
