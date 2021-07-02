@@ -91,9 +91,22 @@ in lib.mapAttrs packageSet {
      - deepOverride :: PackageSet -> PackageSet
        Takes two package sets and deeply overrides the former to use all dependencies from the latter
        See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#package-sets for why this is needed
-  */
+       */
 
-  haskell = {
+  pkgs = {
+
+    versionForPackageSet = set: "none";
+
+    attrPathForVersion = version: [];
+
+    packageSetAttrPaths = [ [] ];
+
+    callScopeAttr = null;
+
+    deepOverride = set: overrides: set // overrides;
+  };
+
+  haskellPackages = {
 
     versionForPackageSet = set: set.ghc.version or null;
 
@@ -121,7 +134,7 @@ in lib.mapAttrs packageSet {
 
   };
 
-  erlang = {
+  beamPackages = {
 
     versionForPackageSet = set: set.erlang.version or null;
 
@@ -144,7 +157,7 @@ in lib.mapAttrs packageSet {
 
   };
 
-  python = {
+  pythonPackages = {
 
     versionForPackageSet = set: set.python.version or null;
 
@@ -169,7 +182,7 @@ in lib.mapAttrs packageSet {
 
   };
 
-  perl = {
+  perlPackages = {
 
     versionForPackageSet = set: set.perl.version or null;
 

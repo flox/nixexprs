@@ -1,0 +1,238 @@
+What if every package can specify the package set in which it should be accessible
+
+What if every channel creates its own namespace
+Every package can then specify in which channel's namespace it wants to live
+
+This means that e.g. if package A.a (channel A, package a) wants to be in B's namespace, you can only depend on it from another package in namespace B
+
+What if we require packages to be duplicated?
+
+What if every package can indicate the channels in which namespaces it can work?
+
+What if every package is built for every channels namespace scope
+
+
+What if when a channel depends on another channel, all the other channels packages are treated as if they were defined in the current channel?
+
+So every channel has a view like
+
+{
+
+  <channel>.<package> = <fun>;
+
+}
+
+Then there could also be a special way to access packages as if they were in another channel
+
+`meta.via <other channel>`
+
+
+If a package from channel A depends on a package from channel B, which depends on one from channel C, what happens then?
+
+The root channel decides the scope in which all packages from all channels are evaluated
+
+What about when we depend on a package from another channel that depends on a package from that channel which is not available in the current one?
+Then we'll have to add that dependency to the current channel, can be aliased somehow probably
+
+But what if we pull in a dependency that has a thousand dependencies on its own?
+
+What we could do is to use all channels we transitively depend on and implicitly inject them into the current channel
+-> This gives us conflicts we have to deal with
+
+For each conflicting, we are presented with a choice of which channel the package should come from
+We can specify this in the channels default.nix with
+
+  resolve.some-package = "some-channel"
+
+
+Also, only the root channel can override nixpkgs packages without effort
+All dependent channels will have to get permission to override nixpkgs packages in the root channels default.nix
+We can do this with the same mechanism as above by indicating a conflict between nixpkgs and the channel in question
+
+
+
+
+Notes:
+- extraOverlays not supported anymore, because we don't have an order between channels and we can't really introspect overlays to merge them
+- deep-override is still supported
+- No need to use channels.*.* anymore, can use * directly
+  -> No need to remember to use python3Packages for all channels from an application anymore
+
+
+Implementation:
+- Collect channels recursively through channels.json
+
+
+  How to make builders with meta.importingChannel work? Because the builders have to be different for every channel that uses them.
+  We could implement this without problems, but it's slow then, because _every_ package of every channel needs to be instantiated separately for every using channel, because we don't know which packages uses meta.importingChannel and which don't
+  So let's make builders distinct from non-builders in some way
+  How about requiring builders to specify an `is-builder` file in their package directory (make it a config.nix already!).
+  But then how much work are we saving?
+
+^ Making this more efficient can also be done later
+
+
+
+In the top-level scope we allow access to all transitively defined packages, and only one of them, as potentially resolved in the root channels default.nix
+
+BUT
+
+Via the `channels.*` mechanism, we can also allow access without having to resolve anything
+Notably the other channels package accessed in this way is still called like any other packages with this root channels base scope.
+
+
+
+Implementation details:
+- First collect all the package files from all channels
+- Split off all deep-overriden ones and resolve conflicts for those
+- Then create an overlay from them, to get a nixpkgs version
+- (x) Then evaluate all channels into { <channel>.<set>.<pname> = <package>; } with the base scope
+- The base scope is constructed from resolving conflicts from (x)
+- Collect outputs from both nixpkgs (limiting it to only the current channels deep overrides)
+- And from (x) for the current channel
+
+
+
+Security issue:
+- Including a third-party channel can cause it to add an overlay to nixpkgs
+- While we can throw an error when the attribute is accessed, we can't throw an error when it is checked for existance
+- This means that, if there were some malicious code in nixpkgs, it could do different things when the third-party channel is included
+- But this is not a problem, because if there was malicious code in nixpkgs, we'd be compromised already, since it includes pretty much all dependencies
+- So we can assume that nixpkgs is not malicious
+- We do need to throw an error if third-party packages try to overlay a nixpkgs attribute, replacing an existing one
+
+- But do we need to do that if the attribute doesn't exist in nixpkgs yet?
+- Yes, because there's code in nixpkgs like this:
+  ```nix
+  { stdenv, readline ? null }: stdenv.mkDerivation {
+    # ...
+    buildInputs = [ readline ];
+  }
+  ```
+  this code includes the readline dependency only if it exists
+  This has the potential to change nixpkgs packages without the channels awareness
+  This can't happen if we make it throw an error even if the attribute doesn't already exist
+
+  What if we straight up disallowed overriding non-existing attributes?
+  Yes let's do that
+  Also, we don't have to come up with a new error message and conflict resolution method then
+
+
+
+- Can something similar happen in channels? A channel including a dependency only if it exists
+- It could happen with the same approach.
+- While we could stop the exact above approach from working by disallowing defaulted arguments
+  It can still happen for nested attribute, or if there's a fixed-point attribute, which can be checked with the `?` or `or` operator
+- A generic fix would be to use a function to access packages instead, in a non-recoverable way, but we can't really implement that.
+- What is the attack surface?
+Not a big problem if we educate people that they shouldn't determine behavior based on attribute existance
+Can also disallow defaulted arguments for arguments that don't exist and give an explanatory error along the lines of
+
+  In <file>, the argument <arg> has a default value, but there is no attribute with such a name defined, which
+
+
+Have a custom callPackage that enforces that autocalled arguments can't override their default value:
+
+
+diff --git a/lib/customisation.nix b/lib/customisation.nix
+index c17cb0d0f8e..793339318f1 100644
+--- a/lib/customisation.nix
++++ b/lib/customisation.nix
+@@ -117,7 +117,13 @@ rec {
+   callPackageWith = autoArgs: fn: args:
+     let
+       f = if lib.isFunction fn then fn else import fn;
+-      auto = builtins.intersectAttrs (lib.functionArgs f) autoArgs;
++      pretty = if lib.isFunction fn then "<function>" else toString fn;
++      funArgs = lib.functionArgs f;
++      auto = lib.mapAttrs (name: value:
++        if funArgs.${name}
++        then throw "In ${pretty} the argument ${name} has a default and is implicitly passed, which is not allowed."
++        else value
++      ) (builtins.intersectAttrs funArgs autoArgs);
+     in makeOverridable f (auto // args);
+
+
+With this we can be sure that third-party channels can't override these arguments
+
+
+
+
+How to do overrides of the same package?
+
+
+
+Problem:
+Another channel X _overrides_ attribute A from nixpkgs. If we use that channel, where should the super version of A for that channel come from? If we set conflict resolution to channel X, we will also cause the super version to be the one from X, giving infinite recursion. But if we specify nixpkgs, we won't get channel X's version at all.
+
+What if we give access to the super attribute as if the channel were evaluated on its own, with its own conflict resolution?
+This should be fine, because that channel could only be evaluated if it is specified as such in the conflict resolution (since if it overides its own attribute, there will have to be another such attribute in nixpgks or another channel), at which point we already trusted that package expression, meaning we can also trust that channels conflict resolution.
+
+Why does using the single conflict resolution attribute work for both the super version and the normal one? That's because a package specified in your own channel will always override others, at which point we can use conflict resolution for when the super one wants to be accessed. And if we don't have a package in our own channel, the super resolution won't be happening in it anyways, but in another channel, which has its own resolution.
+
+
+In the implementation we want to have:
+{
+  deep.<packageSet>.<pname> = {
+    # The chain of channels in the order in which they override each other
+    # E.g. a chain of [] means that the original nixpkgs version is used
+    # A chain of [ "foo" "bar" ] means that we use version bar, but its super
+    # version is the one from foo, whose super version comes from nixpkgs
+    channelChain = [{
+      # The channel of this chain element
+      channel = ...;
+      # The path to the package expression in this channel
+      path = /...;
+    }];
+    # What if there's a cycle? Maybe we should make this more lazy -> not a list
+    # => Probably not worth it, this is a very rare usecase, if it exists at all
+
+  };
+}
+
+
+Or alternatively, each channel could have a structure like this:
+{
+  <packageSet>.<pname> = {
+    super = "nixpkgs" | <channel>;
+    path = /...;
+    deep = <bool>;
+  };
+}
+
+This would represent that channels super packages
+
+We can allow channels themselves to return this, since it's a harmless structure. Might even allow alternate flox libraries to generate it
+
+Can deep be somehow abstracted?
+Yes, let's call it anchor, it's the layer from which the package is defined
+{
+  <packageSet>.<pname> = {
+    # Where this attribute should be anchored
+    # Either on the nixpkgs level via overlays
+    # Or on the floxpkgs level, not using nixpkgs overlays
+    anchor = "nixpkgs" | "floxpkgs";
+    # This package extends the same package from another channel
+    # null means that it extends the anchor
+    # <channel> means that it extends that channel
+    extends = null | <channel>;
+    # The path to the package expression
+    exprPath = /...;
+  };
+}
+
+
+The root channel needs to compute the full closure, and then pass it down to all channels themselves. What it passes down should look like
+
+{
+  <packageSet>.<pname> = {
+    # Optional if nixpkgs has this
+    "nixpkgs" = null;
+    <channel> = null;
+  };
+}
+
+
+What if we depend on an attribute from an indirect, but transitively included channel, and that channel removes the attribute we used. That's no good! We should try to enforce that we can only use direct dependencies attributes.
+
+For determining the extends, limit the global full closures package sets to the channels immediate dependencies. Only require conflict resolution if it's not unique, and no resolution has been provided

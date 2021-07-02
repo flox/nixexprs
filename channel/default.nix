@@ -7,6 +7,7 @@
   if builtins.pathExists (topdir + "/channels.json")
   then builtins.fromJSON (builtins.readFile (topdir + "/channels.json"))
   else []
+, conflictResolution ? {}
 }@chanArgs:
 
 # Arguments for the command line
@@ -272,6 +273,22 @@ in let
   */
   packageSetFuns = prefix: subpath:
     let
+
+      #entries = lib.concatMap (packageSet:
+      #  let packageSetValue = packageSets.${packageSet}; in
+      #  lib.concatMap (channelEntry:
+      #    let packages = dirToAttrs "packageSet ${packageSet}" (channelEntry.value.topdir + "/${packageSet}"); in
+      #    map (pname: {
+      #      #map (version: {
+      #        inherit packageSet pname;# version;
+      #        inherit (packages.${pname}) deep path;
+      #        #attr = packageSetValue.versions.${version}.canonicalPath ++ [ pname ];
+      #        channel = channelEntry.key;
+      #      #}) (lib.attrNames packageSetValue.versions)
+      #    }) (lib.attrNames packages)
+      #  ) closure
+      #) (lib.attrNames packageSets);
+
       # [{ channel, name, value }]
       entries =
         let
@@ -311,31 +328,23 @@ in let
       resolve = overridesNixpkgs: name: entries:
         let
           path = prefix ++ [ name ];
-          ownEntry = lib.findFirst (entry: entry.value.channel == rootChannel) null entries;
-          wants = conflictResolution.${subpath}.${name};
-          resolved = lib.findFirst (entry: entry.value.channel == wants) null entries;
           existsInNixpkgs = lib.hasAttrByPath path pkgs;
-          opts = lib.optional existsInNixpkgs "nixpkgs" ++ map (entry: entry.value.channel) entries;
-          options = "Options are [ ${lib.concatStringsSep ", " opts} ]";
+          attrs = lib.listToAttrs (map (entry: lib.nameValuePair entry.value.channel entry.value) entries) // lib.optionalAttrs existsInNixpkgs {
+            nixpkgs = null;
+          };
+          options = "Options are [ ${lib.concatStringsSep ", " (lib.attrNames attrs)} ]";
         in
         # Deeply overriding packages that don't exist in nixpkgs doesn't make much sense,
         # and it's also unsafe, because nixpkgs can change behavior depending on the presence of an attribute,
         # without accessing the value itself (in which we could throw an error that conflict resolution is needed)
         if overridesNixpkgs && ! existsInNixpkgs then throw "Can't deeply override an attribute (${lib.concatStringsSep "." path}) that doesn't exist in nixpkgs"
         # No need to resolve conflict if we specified it in our own channel
-        else if ownEntry != null then ownEntry.value
+        else if attrs ? ${rootChannel} then attrs.${rootChannel}
         # If a conflict resolution value was provided
         else if conflictResolution ? ${subpath}.${name} then
-          # If we want nixpkgs, return null, so this package gets ignored, allowing the one from nixpkgs to take precedence
-          if wants == "nixpkgs" then
-            if ! existsInNixpkgs
-            then throw "conflictResolution specified ${wants} for ${subpath}.${name}, but that doesn't exist. ${options}"
-            else null
-          # If it's not nixpkgs, but we can't find the specified value
-          else if resolved == null then throw "conflictResolution specified ${wants} for ${subpath}.${name}, but that doesn't exist. ${options}"
-          # Otherwise, return the found value
-          else resolved.value
-        else if ! existsInNixpkgs && lib.length entries == 1 then (lib.head entries).value
+          attrs.${conflictResolution.${subpath}.${name}} or
+          (throw "conflictResolution specified ${conflictResolution.${subpath}.${name}} for ${subpath}.${name}, but that option doesn't exist. ${options}")
+        else if lib.length (lib.attrNames attrs) == 1 then lib.head (lib.attrValues attrs)
         # If we have more entries, throw an error that the conflict needs to be resolved
         else throw "conflictResolution needs to be provided for ${subpath}.${name}. ${options}";
 
@@ -343,9 +352,123 @@ in let
       inherit deep shallow;
     };
 
+  #entries = lib.concatMap (packageSet:
+  #  let packageSetValue = packageSets.${packageSet}; in
+  #  lib.concatMap (channelEntry:
+  #    let packages = dirToAttrs "packageSet ${packageSet}" (channelEntry.value.topdir + "/${packageSet}"); in
+  #    lib.concatMap (pname:
+  #      map (version: {
+  #        inherit packageSet version;
+  #        inherit (packages.${pname}) deep path;
+  #        attr = packageSetValue.versions.${version}.canonicalPath ++ [ pname ];
+  #        channel = channelEntry.key;
+  #      }) (lib.attrNames packageSetValue.versions)
+  #    ) (lib.attrNames packages)
+  #  ) closure
+  #) (lib.attrNames packageSets);
+
+  # For every package set, for every version, for every channel
+  # Generate a
+  # {
+  #   packageSet = "<packageSet>";
+  #   version = "<version>";
+  #   channel = "<channel>";
+  #   deep = "<deep>";
+  #   path = "<path>";
+  #   attribute = "<attr>";
+  # }
+
+  # Then split into deep and not deep
+  # To resolve, first group them by the canonicalPath
+  # Then resolve separately under each one
+
+  #split = lib.partition (entry: entry.deep) entries;
+
+  # :: List Any ->
+  #g = null;
+
+
+  pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
+  pregenResult = if builtins.pathExists pregenPath then
+    withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}")
+    (lib.importJSON pregenPath)
+  else
+    lib.warn
+    "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slow"
+    (import ./package-sets.nix {
+      inherit lib;
+      pregenerate = true;
+      nixpkgs = <nixpkgs>;
+    });
+
+  packageSets = import ./package-sets.nix {
+    inherit lib pregenResult;
+    pregenerate = false;
+  };
+
+  result = lib.mapAttrs (setName: packageSet: lib.mapAttrs (version: versionInfo: packageSetFuns setName versionInfo.canonicalPath) packageSet.versions)packageSets;
+
+
+  dependencyAttrs = removeAttrs (lib.genAttrs dependencies (name: name)) [ name ] // { nixpkgs = null; };
+
+  # Takes a set of the form { <packageSet>.<pname>.<channel> = null; },
+  # indicating which channels have such an attribute
+  ownEntries = closureEntries: lib.mapAttrs (setName: packageSet:
+    lib.mapAttrs (pname: value: {
+      anchor = if value.deep then "nixpkgs" else "floxpkgs";
+      # According to my closure, which channel should I override?
+      extends =
+        let
+          # closure entries at least contains this package
+          attrs = builtins.intersectAttrs dependencyAttrs closureEntries.${setName}.${pname};
+          result =
+            if attrs == {} then "nixpkgs"
+            else if conflictResolution ? ${setName}.${pname} then
+              let value = conflictResolution.${setName}.${pname}; in
+              if attrs ? ${value} then value
+              else throw "Super conflict resolution pointed to channel ${value} which is either not available or not in the direct deps ${toString (lib.attrNames attrs)}"
+            else if lib.length (lib.attrNames attrs) == 1 then lib.head (lib.attrNames attrs)
+            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${name}, ${toString (lib.attrNames attrs)}";
+        in if result == "nixpkgs" then null else result;
+      exprPath = value.path;
+    }) (dirToAttrs setName (topdir + "/${setName}"))
+  ) packageSets;
+
+
+  # { <channel>.<packageSet>.<pname> = { ... }; }
+  global = lib.listToAttrs (map (entry:
+    {
+      name = entry.key;
+      value = import entry.value.topdir {
+        _return = "ownEntries";
+      } perChannel;
+    }
+  ) closure);
+
+  perChannel = lib.mapAttrs (setName: packageSet:
+    let
+      a = lib.concatMap (channel:
+        let packages = global.${channel}.${setName}; in
+        lib.mapAttrsToList (pname: value: {
+          inherit pname channel;
+        }) packages
+      ) (lib.attrNames global);
+
+      grouped = lib.mapAttrs (name: values:
+        lib.genAttrs (map (x: x.channel) values) (x: null) // lib.optionalAttrs (pkgs ? ${setName}.${name}) {
+          nixpkgs = null;
+        }
+      ) (lib.groupBy (x: x.pname) a);
+
+    in grouped
+  ) packageSets;
+
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = packageSetFuns [] "pkgs";
+  outputs = global;
+  inherit ownEntries;
+  inherit perChannel;
+  inherit packageSets;
   #outputs = packageSetFuns [ "pythonPackages" ] "pythonPackages";
   inherit dependencyGraph;
   channelArguments = myChannelArgs;
