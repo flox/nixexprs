@@ -22,8 +22,6 @@ let
     pregenerate = false;
   };
 
-  # TODO: Error if conflicting paths. Maybe on the package-sets.nix side already though
-  mergeSets = lib.foldl' lib.recursiveUpdate { };
 
   /* Sets a value at a specific attribute path, while merging the attributes along that path with the ones from super, suitable for overlays.
 
