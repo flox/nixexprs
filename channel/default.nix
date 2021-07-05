@@ -184,21 +184,6 @@ in let
     chmod +x $out/view
   '';
 
-  #importChannelSrc = name: fun:
-  #  fun {
-  #    inherit name;
-  #    _return = "channelArguments";
-  #  };
-
-  #channelArgs = lib.mapAttrs importChannelSrc channelFloxpkgs // {
-  #  ${name} = myChannelArgs;
-  #};
-
-  #outputFun = import ./output.nix {
-  #  inherit outputFun channelArgs pkgs withVerbosity;
-  #  sourceOverrides = builtins.fromJSON sourceOverrideJson;
-  #};
-
   # Turns a directory into an attribute set.
   # Files with a .nix suffix get turned into an attribute name without the
   # suffix. Directories get turned into an attribute of their name directly.
@@ -258,136 +243,6 @@ in let
 
   rootChannel = name;
 
-  /* Imports all directories and Nix files of the given package directory subpath. Returns
-      {
-        # For attributes that have { deep = true; } in their package directory (doesn't work for files)
-        deep = {
-          <name> = <value>;
-        };
-        # For attributes that don't have { deep = true; }
-        shallow = {
-          <name> = <value>;
-        };
-      }
-     See dirToAttrs for the fields of <value>
-  */
-  packageSetFuns = prefix: subpath:
-    let
-
-      #entries = lib.concatMap (packageSet:
-      #  let packageSetValue = packageSets.${packageSet}; in
-      #  lib.concatMap (channelEntry:
-      #    let packages = dirToAttrs "packageSet ${packageSet}" (channelEntry.value.topdir + "/${packageSet}"); in
-      #    map (pname: {
-      #      #map (version: {
-      #        inherit packageSet pname;# version;
-      #        inherit (packages.${pname}) deep path;
-      #        #attr = packageSetValue.versions.${version}.canonicalPath ++ [ pname ];
-      #        channel = channelEntry.key;
-      #      #}) (lib.attrNames packageSetValue.versions)
-      #    }) (lib.attrNames packages)
-      #  ) closure
-      #) (lib.attrNames packageSets);
-
-      # [{ channel, name, value }]
-      entries =
-        let
-          f = entry:
-            let
-              fun = name: value: {
-                inherit (value) deep;
-                inherit name;
-                value = {
-                  channel = entry.key;
-                  path = value.path;
-                };
-              };
-              attrs = dirToAttrs "[channel ${entry.key}] [packageSet ${subpath}]" (entry.value.topdir + "/${subpath}");
-            in
-              lib.mapAttrsToList fun attrs;
-
-          result = lib.concatMap f closure;
-          split = lib.partition (entry: entry.deep) result;
-        in split;
-
-      # Note: These are attributes potentially containing a null value, in which case the ones from nixpkgs should be propagated
-      # We don't want to filter out the null's because that causes it to be strict
-      deep = lib.mapAttrs (resolve true) (lib.groupBy (entry: entry.name) entries.right);
-      shallow = lib.mapAttrs (resolve false) (lib.groupBy (entry: entry.name) entries.wrong);
-
-      # TODO: Move to channels root default.nix
-      # If multiple channels define the same package, this channel should use the one from the channel specified here
-      conflictResolution = {
-        pkgs.kerberos = "systems";
-        pkgs.hello = "infinisil";
-        pkgs.gnupg = "infinisil";
-        pkgs.dotfiles = "flox-examples";
-        pythonPackages.requests = "nixpkgs";
-      };
-
-      resolve = overridesNixpkgs: name: entries:
-        let
-          path = prefix ++ [ name ];
-          existsInNixpkgs = lib.hasAttrByPath path pkgs;
-          attrs = lib.listToAttrs (map (entry: lib.nameValuePair entry.value.channel entry.value) entries) // lib.optionalAttrs existsInNixpkgs {
-            nixpkgs = null;
-          };
-          options = "Options are [ ${lib.concatStringsSep ", " (lib.attrNames attrs)} ]";
-        in
-        # Deeply overriding packages that don't exist in nixpkgs doesn't make much sense,
-        # and it's also unsafe, because nixpkgs can change behavior depending on the presence of an attribute,
-        # without accessing the value itself (in which we could throw an error that conflict resolution is needed)
-        if overridesNixpkgs && ! existsInNixpkgs then throw "Can't deeply override an attribute (${lib.concatStringsSep "." path}) that doesn't exist in nixpkgs"
-        # No need to resolve conflict if we specified it in our own channel
-        else if attrs ? ${rootChannel} then attrs.${rootChannel}
-        # If a conflict resolution value was provided
-        else if conflictResolution ? ${subpath}.${name} then
-          attrs.${conflictResolution.${subpath}.${name}} or
-          (throw "conflictResolution specified ${conflictResolution.${subpath}.${name}} for ${subpath}.${name}, but that option doesn't exist. ${options}")
-        else if lib.length (lib.attrNames attrs) == 1 then lib.head (lib.attrValues attrs)
-        # If we have more entries, throw an error that the conflict needs to be resolved
-        else throw "conflictResolution needs to be provided for ${subpath}.${name}. ${options}";
-
-    in {
-      inherit deep shallow;
-    };
-
-  #entries = lib.concatMap (packageSet:
-  #  let packageSetValue = packageSets.${packageSet}; in
-  #  lib.concatMap (channelEntry:
-  #    let packages = dirToAttrs "packageSet ${packageSet}" (channelEntry.value.topdir + "/${packageSet}"); in
-  #    lib.concatMap (pname:
-  #      map (version: {
-  #        inherit packageSet version;
-  #        inherit (packages.${pname}) deep path;
-  #        attr = packageSetValue.versions.${version}.canonicalPath ++ [ pname ];
-  #        channel = channelEntry.key;
-  #      }) (lib.attrNames packageSetValue.versions)
-  #    ) (lib.attrNames packages)
-  #  ) closure
-  #) (lib.attrNames packageSets);
-
-  # For every package set, for every version, for every channel
-  # Generate a
-  # {
-  #   packageSet = "<packageSet>";
-  #   version = "<version>";
-  #   channel = "<channel>";
-  #   deep = "<deep>";
-  #   path = "<path>";
-  #   attribute = "<attr>";
-  # }
-
-  # Then split into deep and not deep
-  # To resolve, first group them by the canonicalPath
-  # Then resolve separately under each one
-
-  #split = lib.partition (entry: entry.deep) entries;
-
-  # :: List Any ->
-  #g = null;
-
-
   pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
   pregenResult = if builtins.pathExists pregenPath then
     withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}")
@@ -405,11 +260,6 @@ in let
     inherit lib pregenResult;
     pregenerate = false;
   };
-
-  result = lib.mapAttrs (setName: packageSet: lib.mapAttrs (version: versionInfo: packageSetFuns setName versionInfo.canonicalPath) packageSet.versions)packageSets;
-
-
-
 
   /*
   ## Package specifications
@@ -491,7 +341,7 @@ in let
   /*
   Lists all channels (including nixpkgs) that contain a given package
 
-  This value is passed to all TODO functions in all channels for them to be
+  This value is passed to all ownPackageSpecs functions in all channels for them to be
   able to efficiently decide the `extends` of all the channels packages.
 
   This is later also going to be used by the root channel to decide where to
@@ -526,29 +376,6 @@ in let
     in result
   ) packageSets;
 
-  channelPackageSpecsList = lib.concatMap (channel:
-    lib.concatMap (packageSet:
-      map (pname: channelPackageSpecs.${channel}.${packageSet}.${pname} // {
-        inherit channel packageSet pname;
-      }) (lib.attrNames channelPackageSpecs.${channel}.${packageSet})
-    ) (lib.attrNames channelPackageSpecs.${channel})
-  ) (lib.attrNames channelPackageSpecs);
-
-  split = lib.partition (spec: spec.deep) channelPackageSpecsList;
-
-  deepPackageSetSpecs = lib.mapAttrs (setName: packageSet:
-    let
-      packageList = lib.concatLists (lib.mapAttrsToList (channelName: channel:
-        lib.mapAttrsToList (pname: value: {
-          channel = channelName;
-          inherit pname;
-          value = value;
-        }) channel.${setName}
-      ) channelPackageSpecs);
-    in lib.groupBy (entry: entry.pname) packageList
-  ) packageSets;
-
-
   packageRoots = lib.mapAttrs (setName: setValue:
     lib.mapAttrs (pname: channels:
       let
@@ -557,15 +384,6 @@ in let
         split = lib.partition (channel: channelPackageSpecs.${channel}.${setName}.${pname}.deep) channelList;
 
         root = deep: entries:
-            #buildChain = origin: channel:
-            #  if channel == null then
-            #    if deep then "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
-            #    else []
-            #  else if channel == "nixpkgs" then [ "nixpkgs" ]
-            #  else if ! channelPackageSpecs ? ${channel} then throw "Channel ${channel} as specified in ${origin} doesn't exist"
-            #  else if ! lib.elem channel entries then []
-            #  else if ! channelPackageSpecs.${channel}.${setName} ? ${pname} then throw "Package ${pname} doesn't exist in channel ${channel}"
-            #  else builtins.trace "Calling buildChain for ${channel}, ${setName}, ${pname}" (buildChain channel channelPackageSpecs.${channel}.${setName}.${pname}.extends ++ [ channel ]);
           if entries == [] then null
           # Otherwise, if some channel overrides it, disallow that if the package doesn't exist in nixpkgs already
           else if deep && ! existsInNixpkgs then throw "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
@@ -625,7 +443,7 @@ in let
   overlaySetFun = super: path: valueMod:
     let
       subname = lib.head path;
-      subsuper = super.${subname};
+      subsuper = super.${subname} or {};
       subvalue = subsuper // overlaySetFun subsuper (lib.tail path) valueMod;
     in if path == [ ] then valueMod super else { ${subname} = subvalue; };
 
@@ -680,7 +498,7 @@ in let
 
       baseScope = smartMerge (myPkgs // myPkgs.xorg) (builtins.trace (builtins.attrNames outputs) outputs);
 
-      called = lib.mapAttrs (channel:
+      called = lib.mapAttrs (ownChannel:
         lib.mapAttrs (setName: packages:
           lib.mapAttrs (version: versionInfo:
             let
@@ -700,58 +518,21 @@ in let
                     throw "extends package ${pname} doesn't exist in channel ${spec.extends}"
                   else called.${spec.extends}.${setName}.${version}.${pname};
 
+                packageSetScope = lib.getAttrFromPath versionInfo.canonicalPath perImportingChannel.${ownChannel}.baseScope;
 
-                baseScope' = perImportingChannel.${channel}.baseScope // lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) {
-                  ${packageSets.${setName}.callScopeAttr} = perImportingChannel.${channel}.baseScope;
+                baseScope' = perImportingChannel.${ownChannel}.baseScope // lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) {
+                  ${packageSets.${setName}.callScopeAttr} = packageSetScope;
                 };
 
-                extraScope = lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null)
-                  baseScope'.${packageSets.${setName}.callScopeAttr};
+                extraScope = lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) packageSetScope;
 
-                meta = {
-                  inherit getChannelSource;
-                  getSource = getChannelSource channel;
-                  getBuilderSource = lib.warn
-                    ("meta.getBuilderSource as used by channel ${channel} is deprecated,"
-                      + " use `meta.getChannelSource meta.importingChannel` instead")
-                    (getChannelSource importingChannel);
-                  ownChannel = channel;
-                  inherit importingChannel;
-                  inherit withVerbosity;
+                channels =
+                  let original = lib.mapAttrs (channel: value: ownScope) channelPackageSpecs;
+                  in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
 
-                  channels =
-                    let
-                      original = lib.mapAttrs (channel: value: ownScope) channelPackageSpecs;
-                    in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
-
-                  inherit scope;
-
-                  mapDirectory = dir:
-                    { call ? path: callPackage path { } }:
-                    lib.mapAttrs (name: value: call value.path)
-                    (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
-
-                  importNix =
-                    { channel ? meta.importingChannel, project, path, ... }@args:
-                    let
-                      source = meta.getChannelSource channel project args;
-                      fullPath = source.src + "/${path}";
-                      fullPathChecked = if builtins.pathExists fullPath then
-                        fullPath
-                      else
-                        throw
-                        "`meta.importNix` in ${spec.exprPath}: File ${path} doesn't exist in source for project ${project} in channel ${meta.importingChannel}";
-                    in {
-                      # flox edit should edit the path specified here
-                      _floxPath = fullPath;
-                      # If we're evaluating for a _floxPath, only let the result of an
-                      # importNix call influence the _floxPath with a _floxPathDepth
-                      # greater or equal to 2
-                      # Note that technically we could pass a nested importNix into the
-                      # scope which increases the depth by one more, though this
-                      # doesn't seem to be very beneficial in most cases
-                    } // lib.optionalAttrs (_floxPathDepth >= 2)
-                      (ownCallPackage fullPathChecked { });
+                meta = createMeta {
+                  inherit channels ownChannel importingChannel scope ownScope;
+                  exprPath = spec.exprPath;
                 };
 
                 # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
@@ -759,23 +540,15 @@ in let
                 createScope = isOwn:
                   baseScope' // extraScope // lib.optionalAttrs isOwn {
                     ${pname} = superPackage;
-                      #"${pname} is accessed in ${value.path}, but is not defined because nixpkgs has no ${pname} attribute");
                   } // {
                     # These attributes are reserved
-                    inherit meta;
-                    inherit (meta) channels;
+                    inherit channels meta;
                     flox = baseScope';
-                    #flox = localMeta.channels.flox or (throw
-                    #  "Attempted to access flox channel from channel ${myArgs.name}, but no flox channel is present in NIX_PATH");
-                    inherit callPackage;
+                    callPackage = lib.callPackageWith scope;
                   };
 
-
                 ownScope = createScope true;
-                ownCallPackage = lib.callPackageWith ownScope;
-
                 scope = createScope false;
-                callPackage = lib.callPackageWith scope;
 
                 ownOutput = {
                   # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
@@ -786,7 +559,7 @@ in let
                   # package call influence the _floxPath with a _floxPathDepth
                   # greater or equal to 1
                 } // lib.optionalAttrs (_floxPathDepth >= 1)
-                  (ownCallPackage spec.exprPath { });
+                  (lib.callPackageWith ownScope spec.exprPath { });
 
               in ownOutput
             ) packages
@@ -800,8 +573,13 @@ in let
 
   inherit (import ./nestedListToAttrs.nix { inherit lib; }) nestedListToAttrs;
 
-  getChannelSource = pkgs.callPackage ./getSource.nix {
+  # FIXME: Custom callPackageWith that ensures default arguments aren't autopassed
+  callPackageWith = lib.callPackageWith;
+
+  createMeta = pkgs.callPackage ./meta.nix {
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
+    inherit dirToAttrs withVerbosity callPackageWith;
+    floxPathDepth = _floxPathDepth;
   };
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
@@ -815,7 +593,6 @@ in builtins.seq name {
   inherit ownPackageSpecs;
   inherit packageChannels;
   inherit packageSets;
-  #outputs = packageSetFuns [ "pythonPackages" ] "pythonPackages";
   inherit dependencyGraph;
   channelArguments = myChannelArgs;
 }.${_return}

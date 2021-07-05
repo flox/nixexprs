@@ -1,1 +1,1 @@
-(import <test> { }).ncurses.result
+(import <test> { }).pkgs.ncurses.result

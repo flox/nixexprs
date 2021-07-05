@@ -11,5 +11,9 @@
       prefix = "flox";
       path = repo;
     }
+    {
+      prefix = "nixpkgs-pregen";
+      path = ./channels/nixpkgs-pregen;
+    }
   ];
 }
