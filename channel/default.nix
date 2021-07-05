@@ -548,66 +548,35 @@ in let
     in lib.groupBy (entry: entry.pname) packageList
   ) packageSets;
 
-  packageChains = lib.mapAttrs (setName: setValue:
+  packageRoots = lib.mapAttrs (setName: setValue:
     lib.mapAttrs (pname: channels:
       let
         existsInNixpkgs = channels ? nixpkgs;
         channelList = lib.attrNames (removeAttrs channels [ "nixpkgs" ]);
         split = lib.partition (channel: channelPackageSpecs.${channel}.${setName}.${pname}.deep) channelList;
 
-        #resolve = overridesNixpkgs: entries:
-        #  let
-        #    attrs = entries ++ lib.optional existsInNixpkgs "nixpkgs";
-        #    #attrs = lib.listToAttrs (map (entry: lib.nameValuePair entry.value.channel entry.value) entries) // lib.optionalAttrs existsInNixpkgs {
-        #    #  nixpkgs = null;
-        #    #};
-        #    options = "Options are [ ${lib.concatStringsSep ", " (lib.attrNames attrs)} ]";
-        #  in
-        #  # Deeply overriding packages that don't exist in nixpkgs doesn't make much sense,
-        #  # and it's also unsafe, because nixpkgs can change behavior depending on the presence of an attribute,
-        #  # without accessing the value itself (in which we could throw an error that conflict resolution is needed)
-        #  if overridesNixpkgs && ! existsInNixpkgs then throw "Can't deeply override an attribute (${lib.concatStringsSep "." [setName pname]}) that doesn't exist in nixpkgs"
-        #  # No need to resolve conflict if we specified it in our own channel
-        #  else if attrs ? ${rootChannel} then attrs.${rootChannel}
-        #  # If a conflict resolution value was provided
-        #  else if conflictResolution ? ${setName}.${pname} then
-        #    attrs.${conflictResolution.${setName}.${pname}} or
-        #    (throw "conflictResolution specified ${conflictResolution.${setName}.${pname}} for ${setName}.${pname}, but that option doesn't exist. ${options}")
-        #  else if lib.length (lib.attrNames attrs) == 1 then lib.head (lib.attrValues attrs)
-        #  # If we have more entries, throw an error that the conflict needs to be resolved
-        #  else throw "conflictResolution needs to be provided for ${setName}.${pname}. ${options}";
-
-        deepRoot = deep: entries:
-          let
-            buildChain = origin: channel:
-              if channel == null then
-                if deep then "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
-                else []
-              else if channel == "nixpkgs" then [ "nixpkgs" ]
-              else if ! channelPackageSpecs ? ${channel} then throw "Channel ${channel} as specified in ${origin} doesn't exist"
-              else if ! lib.elem channel entries then []
-              else if ! channelPackageSpecs.${channel}.${setName} ? ${pname} then throw "Package ${pname} doesn't exist in channel ${channel}"
-              else builtins.trace "Calling buildChain for ${channel}, ${setName}, ${pname}" (buildChain channel channelPackageSpecs.${channel}.${setName}.${pname}.extends ++ [ channel ]);
-
-            result =
-              if entries == [] then []
-              # Otherwise, if some channel overrides it, disallow that if the package doesn't exist in nixpkgs already
-              #else if deep && ! existsInNixpkgs then throw "Can't deeply override attribute that doesn't exist"
-              # The root channel takes precedence
-              else if lib.elem rootChannel entries then buildChain rootChannel rootChannel
-              else if conflictResolution ? ${setName}.${pname} then buildChain rootChannel conflictResolution.${setName}.${pname} # TODO: Validate that this option exists
-              else if lib.length entries == 1 then buildChain rootChannel (lib.head entries)
-              else throw "conflictResolution needs to be provided for ${setName}.${pname} in channel ${rootChannel}. Options are ${toString entries}";
-          in result;
-
-        getChain = deep: channel:
-          if channel == "nixpkgs" then [ "nixpkgs" ]
-          else if channel == null then []
-          else builtins.trace "Appending ${channel} to chain for ${setName}.${pname}" (getChain deep (channelPackageSpecs.${channel}.${setName}.${pname}.extends or null) ++ [ channel ]);
+        root = deep: entries:
+            #buildChain = origin: channel:
+            #  if channel == null then
+            #    if deep then "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
+            #    else []
+            #  else if channel == "nixpkgs" then [ "nixpkgs" ]
+            #  else if ! channelPackageSpecs ? ${channel} then throw "Channel ${channel} as specified in ${origin} doesn't exist"
+            #  else if ! lib.elem channel entries then []
+            #  else if ! channelPackageSpecs.${channel}.${setName} ? ${pname} then throw "Package ${pname} doesn't exist in channel ${channel}"
+            #  else builtins.trace "Calling buildChain for ${channel}, ${setName}, ${pname}" (buildChain channel channelPackageSpecs.${channel}.${setName}.${pname}.extends ++ [ channel ]);
+          if entries == [] then null
+          # Otherwise, if some channel overrides it, disallow that if the package doesn't exist in nixpkgs already
+          else if deep && ! existsInNixpkgs then throw "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
+          # The root channel takes precedence
+          else if lib.elem rootChannel entries then rootChannel
+          else if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname} # TODO: Validate that this option exists
+          else if lib.length entries == 1 then lib.head entries
+          else throw "conflictResolution needs to be provided for ${setName}.${pname} in channel ${rootChannel}. Options are ${toString entries}";
 
       in {
-        deep = deepRoot true split.right;
-        shallow = deepRoot false split.wrong;
+        deep = root true split.right;
+        shallow = root false split.wrong;
       }
     ) setValue
   ) packageChannels;
@@ -619,7 +588,7 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = packageChains;
+  outputs = packageRoots;
   inherit ownPackageSpecs;
   inherit packageChannels;
   inherit packageSets;
