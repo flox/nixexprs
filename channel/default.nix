@@ -581,14 +581,50 @@ in let
     ) setValue
   ) packageChannels;
 
+
+
   # TODO: Inject all channels
+  # Pkgs with overlays
+  myPkgs = pkgs;
+
+  # Final scope
   baseScope = pkgs;
 
+  called = lib.mapAttrs (channel:
+    lib.mapAttrs (setName: packages:
+      lib.mapAttrs (version: versionInfo:
+        lib.mapAttrs (pname: spec:
+          let
+            superSet = lib.getAttrFromPath versionInfo.canonicalPath (if spec.deep then pkgs else myPkgs);
 
+            super =
+              if spec.extends == "nixpkgs" then
+                superSet.${pname}
+              else
+                # Todo: What if these attributes don't exist?
+                called.${spec.extends}.${setName}.${version}.${pname};
+
+
+            baseScope' = baseScope // lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) {
+              ${packageSets.${setName}.callScopeAttr} = superSet;
+            };
+
+            extraScope = lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null)
+              baseScope'.${packageSets.${setName}.callScopeAttr};
+
+          in lib.callPackageWith (baseScope' // extraScope // {
+            ${pname} = super;
+            flox = baseScope';
+            channels = lib.mapAttrs (channel: value: baseScope') channelPackageSpecs;
+          }) spec.exprPath {}
+        ) packages
+      ) packageSets.${setName}.versions
+    )
+  ) channelPackageSpecs;
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = packageRoots;
+  outputs = called;
   inherit ownPackageSpecs;
   inherit packageChannels;
   inherit packageSets;
