@@ -581,14 +581,43 @@ in let
     ) setValue
   ) packageChannels;
 
+  smartMerge = lib.recursiveUpdateUntil (path: l: r:
+    let
+      lDrv = lib.isDerivation l;
+      rDrv = lib.isDerivation r;
+      prettyPath = lib.concatStringsSep "." path;
+      warning = "Overriding ${lib.optionalString (!lDrv) "non-"}derivation ${
+          lib.concatStringsSep "." path
+        } in nixpkgs"
+        + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
+    in if lDrv == rDrv then
+    # If both sides are derivations, override completely
+      if rDrv then
+        withVerbosity 7 (builtins.trace
+          "[channel ${rootChannel}] [smartMergePath ${prettyPath}] Overriding because both sides are derivations")
+        true
+        # If both sides are attribute sets, merge recursively
+      else if lib.isAttrs l && lib.isAttrs r then
+        withVerbosity 7 (builtins.trace
+          "[channel ${rootChannel}] [smartMergePath ${prettyPath}] Recursing because both sides are attribute sets")
+        false
+        # Otherwise, override completely
+      else
+        withVerbosity 7 (builtins.trace
+          "[channel ${rootChannel}] [smartMergePath ${prettyPath}] Overriding because left is ${
+            builtins.typeOf l
+          } and right is ${builtins.typeOf r}") true
+    else
+      lib.warn warning true);
 
 
   # TODO: Inject all channels
   # Pkgs with overlays
-  myPkgs = pkgs;
+  myPkgs = pkgs.extend (self: super: overlaySet "deep");
 
+  outputs = overlaySet "shallow";
   # Final scope
-  baseScope = pkgs;
+  baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
 
   called = lib.mapAttrs (channel:
     lib.mapAttrs (setName: packages:
@@ -615,6 +644,8 @@ in let
           in lib.callPackageWith (baseScope' // extraScope // {
             ${pname} = super;
             flox = baseScope';
+            # TODO
+            meta = {};
             channels = lib.mapAttrs (channel: value: baseScope') channelPackageSpecs;
           }) spec.exprPath {}
         ) packages
@@ -622,9 +653,40 @@ in let
     )
   ) channelPackageSpecs;
 
+  inherit (import ./nestedListToAttrs.nix { inherit lib; }) nestedListToAttrs;
+
+  overlaySet = type: nestedListToAttrs (lib.concatMap (setName:
+    let
+      setValue = packageSets.${setName};
+      deepPackages = lib.filterAttrs (pname: spec: spec.${type} != null) packageRoots.${setName};
+    in lib.concatMap (version:
+      let
+        canonicalPath = setValue.versions.${version}.canonicalPath;
+        superSet = lib.optionalAttrs (canonicalPath != []) (lib.getAttrFromPath canonicalPath pkgs);
+        overridingSet = lib.mapAttrs (pname: spec:
+          builtins.trace "Overlaying ${pname}" called.${spec.${type}}.${setName}.${version}.${pname}
+        ) deepPackages;
+        newSet = if type == "deep" then setValue.deepOverride superSet overridingSet else overridingSet;
+      in [{
+        path = setValue.versions.${version}.canonicalPath;
+        value = newSet;
+      }] ++ map (alias: {
+        path = alias;
+        value = newSet;
+      }) setValue.versions.${version}.aliases
+    ) (lib.attrNames setValue.versions)
+  ) (lib.attrNames packageRoots));
+
+  list = lib.concatMap (packageSet:
+    map (pname: {
+      inherit packageSet pname;
+      roots = packageRoots.${packageSet}.${pname};
+    }) (lib.attrNames packageRoots.${packageSet})
+  ) (lib.attrNames packageRoots);
+
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = called;
+  outputs = outputs;
   inherit ownPackageSpecs;
   inherit packageChannels;
   inherit packageSets;
