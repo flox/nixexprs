@@ -474,9 +474,8 @@ in let
               can = self: super: overlaySetFun super canonicalPath (superSet:
                 let
                   overridingSet = lib.mapAttrs (pname: spec:
-                    if spec.${type} == null then builtins.trace "No ${type} override for ${pname}, using nixpkgs version" (superSet.${pname} or null)
-                    else called.${spec.${type}}.${setName}.${version}.${pname}
-                  ) packageRoots.${setName};
+                    called.${spec.${type}}.${setName}.${version}.${pname}
+                  ) (lib.filterAttrs (pname: spec: spec.${type} != null) packageRoots.${setName});
                 in
                 if type == "deep" then setValue.deepOverride superSet overridingSet
                 else overridingSet
@@ -560,7 +559,7 @@ in let
                   } // {
                     # These attributes are reserved
                     inherit channels meta;
-                    flox = baseScope';
+                    flox = ownScope;
                     callPackage = lib.callPackageWith scope;
                   };
 
