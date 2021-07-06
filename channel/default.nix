@@ -411,21 +411,23 @@ in let
 
   perImportingChannel = lib.mapAttrs (importingChannel: _:
     let
-      outputs = nestedListToAttrs (lib.concatMap (setName:
-        lib.concatMap (version:
-          let
-            value = perImportingChannel.${importingChannel}.called.${importingChannel}.${setName}.${version};
+      outputs = lib.mapAttrs (ownChannel: _:
+        nestedListToAttrs (lib.concatMap (setName:
+          lib.concatMap (version:
+            let
+              value = called.${ownChannel}.${setName}.${version};
 
-            versionInfo = packageSets.${setName}.versions.${version};
-            paths = [ versionInfo.canonicalPath ] ++ versionInfo.aliases;
+              versionInfo = packageSets.${setName}.versions.${version};
+              paths = [ versionInfo.canonicalPath ] ++ versionInfo.aliases;
 
-            result = map (path: {
-              inherit path value;
-            }) paths;
+              result = map (path: {
+                inherit path value;
+              }) paths;
 
-          in lib.optionals (value != {}) result
-        ) (lib.attrNames packageSets.${setName}.versions)
-      ) (lib.attrNames packageRoots));
+            in lib.optionals (value != {}) result
+          ) (lib.attrNames packageSets.${setName}.versions)
+        ) (lib.attrNames packageRoots))
+      ) channelPackageSpecs;
 
       pathsToModify = type: lib.concatMap (setName:
         lib.concatMap (version:
@@ -500,9 +502,13 @@ in let
                     channels =
                       let
                         original = lib.mapAttrs (channel: value:
-                          lib.mapAttrs (pname:
-                            lib.warn "Accessing channel.${name}.${pname} from ${spec.exprPath}. This is discouraged and could lead to infinite recursion. Add ${pname} to the argument list directly instead."
-                          ) result
+                          let
+                            x = lib.mapAttrs (pname:
+                              lib.warn "Accessing channel.${name}.${pname} from ${spec.exprPath}. This is discouraged as it circumvents the conflict resolution mechanism. Add ${pname} to the argument list directly instead."
+                            ) perImportingChannel.${ownChannel}.outputs.${channel};
+                          in x // {
+                            ${packageSets.${setName}.callScopeAttr} = lib.getAttrFromPath versionInfo.canonicalPath x;
+                          }
                         ) channelPackageSpecs;
                       in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
 
@@ -560,7 +566,7 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = perImportingChannel.${rootChannel}.outputs // {
+  outputs = perImportingChannel.${rootChannel}.outputs.${rootChannel} // {
     pkgs = perImportingChannel.${rootChannel}.pkgs;
   };
   inherit packageRoots;
