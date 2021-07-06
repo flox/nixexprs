@@ -388,15 +388,18 @@ in let
         split = lib.partition (channel: channelPackageSpecs.${channel}.${setName}.${pname}.deep) channelList;
 
         root = deep: entries:
-          if entries == [] then null
-          # Otherwise, if some channel overrides it, disallow that if the package doesn't exist in nixpkgs already
-          else if deep && ! existsInNixpkgs then throw "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
-          # The root channel takes precedence
-          else if lib.elem rootChannel entries then rootChannel
-          else if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname} # TODO: Validate that this option exists
-          # Only when we have a single entry and it doesn't exist in nixpkgs, we can have an automatic conflict-free resolution
-          else if lib.length entries == 1 && (lib.head entries == "flox" || ! existsInNixpkgs) then lib.head entries
-          else throw "conflictResolution needs to be provided for ${setName}.${pname} in channel ${rootChannel}. Options are ${toString entries + lib.optionalString existsInNixpkgs " nixpkgs"}";
+          if entries == [] then {}
+          else {
+            channel =
+              # Otherwise, if some channel overrides it, disallow that if the package doesn't exist in nixpkgs already
+              if deep && ! existsInNixpkgs then throw "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
+              # The root channel takes precedence
+              else if lib.elem rootChannel entries then rootChannel
+              else if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname} # TODO: Validate that this option exists
+              # Only when we have a single entry and it doesn't exist in nixpkgs, we can have an automatic conflict-free resolution
+              else if lib.length entries == 1 && (lib.head entries == "flox" || ! existsInNixpkgs) then lib.head entries
+              else throw "conflictResolution needs to be provided for ${setName}.${pname} in channel ${rootChannel}. Options are ${toString entries + lib.optionalString existsInNixpkgs " nixpkgs"}";
+          };
 
       in {
         deep = root true split.right;
@@ -464,7 +467,7 @@ in let
           let
             setValue = packageSets.${setName};
             # FIXME: This filter makes things too strict
-            deepPackages = lib.filterAttrs (pname: spec: spec.${type} != null) packageRoots.${setName};
+            #deepPackages = lib.filterAttrs (pname: spec: spec.${type} != {}) packageRoots.${setName};
           in lib.concatMap (version:
             let
               canonicalPath = setValue.versions.${version}.canonicalPath;
@@ -474,8 +477,8 @@ in let
               can = self: super: overlaySetFun super canonicalPath (superSet:
                 let
                   overridingSet = lib.mapAttrs (pname: spec:
-                    called.${spec.${type}}.${setName}.${version}.${pname}
-                  ) (lib.filterAttrs (pname: spec: spec.${type} != null) packageRoots.${setName});
+                    called.${spec.${type}.channel}.${setName}.${version}.${pname}
+                  ) (lib.filterAttrs (pname: spec: spec.${type} != {}) packageRoots.${setName});
                 in
                 if type == "deep" then setValue.deepOverride superSet overridingSet
                 else overridingSet
