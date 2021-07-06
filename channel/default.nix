@@ -408,111 +408,40 @@ in let
     ) setValue
   ) packageChannels;
 
-  smartMerge = lib.recursiveUpdateUntil (path: l: r:
-    let
-      lDrv = lib.isDerivation l;
-      rDrv = lib.isDerivation r;
-      same = builtins.tryEval (lDrv == rDrv);
-      prettyPath = lib.concatStringsSep "." path;
-      warning = "Overriding ${lib.optionalString (!lDrv) "non-"}derivation ${
-          lib.concatStringsSep "." path
-        } in nixpkgs"
-        + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
-    in
-    # Protect against throw's in the thing to be overridden
-    # TODO: I don't think this should be necessary since we know that we want to override packages completely
-    if ! same.success then true
-    else if same.value then
-    # If both sides are derivations, override completely
-      if rDrv then
-        withVerbosity 7 (builtins.trace
-          "[channel ${rootChannel}] [smartMergePath ${prettyPath}] Overriding because both sides are derivations")
-        true
-        # If both sides are attribute sets, merge recursively
-      else if lib.isAttrs l && lib.isAttrs r then
-        withVerbosity 7 (builtins.trace
-          "[channel ${rootChannel}] [smartMergePath ${prettyPath}] Recursing because both sides are attribute sets")
-        false
-        # Otherwise, override completely
-      else
-        withVerbosity 7 (builtins.trace
-          "[channel ${rootChannel}] [smartMergePath ${prettyPath}] Overriding because left is ${
-            builtins.typeOf l
-          } and right is ${builtins.typeOf r}") true
-    else
-      lib.warn warning true);
-
-
-  /* Sets a value at a specific attribute path, while merging the attributes along that path with the ones from super, suitable for overlays.
-
-     Note: Because overlays implicitly use `super //` on the attributes, we don't want to have `super //` on the toplevel. We also don't want `super.<path> // <value>` on the lowest level, as we want to override the attribute path completely.
-
-     Examples:
-       overlaySet super [] value == value
-       overlaySet super [ "foo" ] value == { foo = value; }
-       overlaySet super [ "foo" "bar" ] value == { foo = super.foo // { bar = value; }; }
-  */
-  overlaySetFun = super: path: valueMod:
-    let
-      subname = lib.head path;
-      subsuper = super.${subname} or {};
-      subvalue = subsuper // overlaySetFun subsuper (lib.tail path) valueMod;
-    in if path == [ ] then valueMod super else { ${subname} = subvalue; };
-
   perImportingChannel = lib.mapAttrs (importingChannel: _:
     let
-      # FIXME: This is very ugly
-      overlays = type:
-        lib.concatMap (setName:
+
+      pathsToModify = type: lib.concatMap (setName:
+        lib.concatMap (version:
           let
-            setValue = packageSets.${setName};
-            # FIXME: This filter makes things too strict
-            #deepPackages = lib.filterAttrs (pname: spec: spec.${type} != {}) packageRoots.${setName};
-          in lib.concatMap (version:
-            let
-              canonicalPath = setValue.versions.${version}.canonicalPath;
-              #superSet = lib.optionalAttrs (canonicalPath != []) (lib.getAttrFromPath canonicalPath pkgs);
-              #;
-              #newSet = if type == "deep" then setValue.deepOverride (builtins.trace "superset from ${lib.concatStringsSep "." canonicalPath} contains ${toString (lib.attrNames superSet)}" superSet) overridingSet else overridingSet;
-              can = self: super: overlaySetFun super canonicalPath (superSet:
-                let
-                  overridingSet = lib.mapAttrs (pname: spec:
-                    called.${spec.${type}.channel}.${setName}.${version}.${pname}
-                  ) (lib.filterAttrs (pname: spec: spec.${type} != {}) packageRoots.${setName});
-                in
-                if type == "deep" then setValue.deepOverride superSet overridingSet
-                else overridingSet
-              );
-              ali = map (alias: self: super:
-                overlaySetFun super alias (_: lib.getAttrFromPath canonicalPath self)
-              ) setValue.versions.${version}.aliases;
-            in [ can ] ++ ali
-          ) (lib.attrNames setValue.versions)
-        ) (lib.attrNames packageRoots);
+            canonicalPath = packageSets.${setName}.versions.${version}.canonicalPath;
 
-      #overlaySet = type: let list = (lib.concatMap (setName:
-      #  let
-      #    setValue = packageSets.${setName};
-      #    deepPackages = lib.filterAttrs (pname: spec: spec.${type} != null) packageRoots.${setName};
-      #  in lib.concatMap (version:
-      #    let
-      #      canonicalPath = builtins.trace "canonicalPath for ${setName} and version ${version} is ${lib.concatStringsSep "." setValue.versions.${version}.canonicalPath}" setValue.versions.${version}.canonicalPath;
-      #      superSet = lib.optionalAttrs (canonicalPath != []) (lib.getAttrFromPath canonicalPath pkgs);
-      #      overridingSet = lib.mapAttrs (pname: spec:
-      #        builtins.trace "Overlaying ${pname} version ${version}, importingChannel ${importingChannel}, setName ${setName}" called.${spec.${type}}.${setName}.${version}.${pname}
-      #      ) deepPackages;
-      #      newSet = if type == "deep" then setValue.deepOverride (builtins.trace "superset from ${lib.concatStringsSep "." canonicalPath} contains ${toString (lib.attrNames superSet)}" superSet) overridingSet else overridingSet;
-      #      can = overlaySetFun pkgs canonicalPath (_: newSet);
-      #      ali = map (alias: overlaySetFun pkgs alias (_: newSet)) setValue.versions.${version}.aliases;
-      #    in [can] ++ ali
-      #  ) (lib.attrNames setValue.versions)
-      #) (lib.attrNames packageRoots)); in lib.foldl' lib.recursiveUpdate { } list;
+            overridingSet = lib.mapAttrs (pname: spec:
+              called.${spec.${type}.channel}.${setName}.${version}.${pname}
+            ) (lib.filterAttrs (pname: spec: spec.${type} != {}) packageRoots.${setName});
 
-      myPkgs = pkgs.appendOverlays (overlays "deep");
+            canonical = {
+              path = canonicalPath;
+              mod = super:
+                if type == "deep"
+                then packageSets.${setName}.deepOverride super overridingSet
+                else super // overridingSet;
+            };
 
-      outputs = lib.foldl' (acc: el: acc.extend el) (lib.makeExtensible (self: {})) (overlays "shallow");
+            aliases = map (alias: {
+              path = alias;
+              mod = super: lib.getAttrFromPath canonicalPath (if type == "deep" then myPkgs else basePkgs);
+            }) packageSets.${setName}.versions.${version}.aliases;
 
-      baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
+          in [ canonical ] ++ aliases
+        ) (lib.attrNames packageSets.${setName}.versions)
+      ) (lib.attrNames packageRoots);
+
+      myPkgs = pkgs.extend (self: modifyPaths (pathsToModify "deep"));
+
+      basePkgs = modifyPaths (pathsToModify "shallow") myPkgs;
+
+      baseScope = basePkgs // basePkgs.xorg;
 
       called = lib.mapAttrs (ownChannel:
         lib.mapAttrs (setName: packages:
@@ -586,12 +515,12 @@ in let
         )
       ) channelPackageSpecs;
     in {
-      inherit outputs called baseScope;
+      inherit called baseScope basePkgs;
       pkgs = myPkgs;
     }
   ) channelPackageSpecs;
 
-  inherit (import ./nestedListToAttrs.nix { inherit lib; }) nestedListToAttrs;
+  inherit (import ./modifyPaths.nix { inherit lib; }) modifyPaths;
 
   # FIXME: Custom callPackageWith that ensures default arguments aren't autopassed
   callPackageWith = lib.callPackageWith;
@@ -604,7 +533,7 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = perImportingChannel.${rootChannel}.outputs // {
+  outputs = perImportingChannel.${rootChannel}.basePkgs // {
     pkgs = perImportingChannel.${rootChannel}.pkgs;
   };
   inherit packageRoots;

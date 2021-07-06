@@ -103,7 +103,7 @@ in lib.mapAttrs packageSet {
 
     callScopeAttr = null;
 
-    deepOverride = set: overrides: overrides;
+    deepOverride = set: overrides: set // overrides;
   };
 
   haskellPackages = {
