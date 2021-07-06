@@ -292,7 +292,7 @@ in let
   }
   */
 
-  dependencyAttrs = lib.genAttrs (dependencies' ++ [ "nixpkgs" ]) (name: null);
+  dependencyAttrs = removeAttrs (lib.genAttrs (dependencies' ++ [ "nixpkgs" ]) (name: null)) [ name ];
 
   /*
   Returns all the package specifications in our own channel. To determine the
