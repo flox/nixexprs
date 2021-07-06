@@ -1,5 +1,5 @@
-{ flox, hello }:
-(builtins.trace (flox ? mkDerivation) flox).mkDerivation {
+{ mkDerivation, flox, hello }:
+mkDerivation {
   project = "testPackage";
   src = hello.src;
   version = "1.0";

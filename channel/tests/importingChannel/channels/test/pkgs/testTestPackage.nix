@@ -1,0 +1,3 @@
+{ meta }: {
+  inherit (meta) importingChannel;
+}

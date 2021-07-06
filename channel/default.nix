@@ -25,6 +25,13 @@
 , ... }@args:
 let topdir' = topdir;
 in let
+
+  # The dependencies of this channel, in the form { <channel> = null; }
+  # Includes nixpkgs, doesn't include own channel
+
+  dependencies' = lib.unique (lib.subtractLists [ name "nixpkgs" ] dependencies ++ [ "flox" ]);
+
+
   # To prevent any accidental imports into the store, and to make sure it's a string, not a path
   topdir = toString topdir';
 
@@ -129,7 +136,8 @@ in let
   firstSuccess.success;
 
   myChannelArgs = {
-    inherit name topdir extraOverlays dependencies;
+    inherit name topdir extraOverlays;
+    dependencies = dependencies';
     inherit _floxPathDepth;
   };
 
@@ -284,11 +292,7 @@ in let
   }
   */
 
-  # The dependencies of this channel, in the form { <channel> = null; }
-  # Includes nixpkgs, doesn't include own channel
-  dependencyAttrs = removeAttrs (lib.genAttrs dependencies (name: null)) [ name ] // {
-    nixpkgs = null;
-  };
+  dependencyAttrs = lib.genAttrs (dependencies' ++ [ "nixpkgs" ]) (name: null);
 
   /*
   Returns all the package specifications in our own channel. To determine the
@@ -454,23 +458,28 @@ in let
         lib.concatMap (setName:
           let
             setValue = packageSets.${setName};
+            # FIXME: This filter makes things too strict
             deepPackages = lib.filterAttrs (pname: spec: spec.${type} != null) packageRoots.${setName};
           in lib.concatMap (version:
             let
               canonicalPath = setValue.versions.${version}.canonicalPath;
               #superSet = lib.optionalAttrs (canonicalPath != []) (lib.getAttrFromPath canonicalPath pkgs);
-              overridingSet = lib.mapAttrs (pname: spec:
-                called.${spec.${type}}.${setName}.${version}.${pname}
-              ) deepPackages;
+              #;
               #newSet = if type == "deep" then setValue.deepOverride (builtins.trace "superset from ${lib.concatStringsSep "." canonicalPath} contains ${toString (lib.attrNames superSet)}" superSet) overridingSet else overridingSet;
               can = self: super: overlaySetFun super canonicalPath (superSet:
+                let
+                  overridingSet = lib.mapAttrs (pname: spec:
+                    if spec.${type} == null then superSet.${pname} or null
+                    else called.${spec.${type}}.${setName}.${version}.${pname}
+                  ) packageRoots.${setName};
+                in
                 if type == "deep" then setValue.deepOverride superSet overridingSet
                 else overridingSet
               );
               ali = map (alias: self: super:
                 overlaySetFun super alias (_: lib.getAttrFromPath canonicalPath self)
               ) setValue.versions.${version}.aliases;
-            in builtins.trace "Overlays for ${setName}" ([ can ] ++ ali)
+            in [ can ] ++ ali
           ) (lib.attrNames setValue.versions)
         ) (lib.attrNames packageRoots);
 
@@ -496,7 +505,7 @@ in let
 
       outputs = lib.foldl' (acc: el: acc.extend el) (lib.makeExtensible (self: {})) (overlays "shallow");
 
-      baseScope = smartMerge (myPkgs // myPkgs.xorg) (builtins.trace (builtins.attrNames outputs) outputs);
+      baseScope = smartMerge (myPkgs // myPkgs.xorg) outputs;
 
       called = lib.mapAttrs (ownChannel:
         lib.mapAttrs (setName: packages:
@@ -518,11 +527,14 @@ in let
                     throw "extends package ${pname} doesn't exist in channel ${spec.extends}"
                   else called.${spec.extends}.${setName}.${version}.${pname};
 
-                packageSetScope = lib.getAttrFromPath versionInfo.canonicalPath perImportingChannel.${ownChannel}.baseScope;
-
-                baseScope' = perImportingChannel.${ownChannel}.baseScope // lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) {
+                packageSetScope = lib.getAttrFromPath versionInfo.canonicalPath perImportingChannel.${ownChannel}.baseScope // {
                   ${packageSets.${setName}.callScopeAttr} = packageSetScope;
                 };
+
+                baseScope' = perImportingChannel.${ownChannel}.baseScope
+                  // lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) {
+                    ${packageSets.${setName}.callScopeAttr} = packageSetScope;
+                  };
 
                 extraScope = lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) packageSetScope;
 
@@ -567,7 +579,8 @@ in let
         )
       ) channelPackageSpecs;
     in {
-      inherit outputs pkgs called baseScope;
+      inherit outputs called baseScope;
+      pkgs = myPkgs;
     }
   ) channelPackageSpecs;
 

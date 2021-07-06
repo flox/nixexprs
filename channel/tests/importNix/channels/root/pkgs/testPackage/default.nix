@@ -1,4 +1,4 @@
-{ meta }:
+{ mkDerivation, meta }:
 meta.importNix {
   project = "testPackage";
   src = ./src;
