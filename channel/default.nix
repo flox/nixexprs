@@ -408,8 +408,24 @@ in let
     ) setValue
   ) packageChannels;
 
+
   perImportingChannel = lib.mapAttrs (importingChannel: _:
     let
+      outputs = nestedListToAttrs (lib.concatMap (setName:
+        lib.concatMap (version:
+          let
+            value = perImportingChannel.${importingChannel}.called.${importingChannel}.${setName}.${version};
+
+            versionInfo = packageSets.${setName}.versions.${version};
+            paths = [ versionInfo.canonicalPath ] ++ versionInfo.aliases;
+
+            result = map (path: {
+              inherit path value;
+            }) paths;
+
+          in lib.optionals (value != {}) result
+        ) (lib.attrNames packageSets.${setName}.versions)
+      ) (lib.attrNames packageRoots));
 
       pathsToModify = type: lib.concatMap (setName:
         lib.concatMap (version:
@@ -437,9 +453,12 @@ in let
         ) (lib.attrNames packageSets.${setName}.versions)
       ) (lib.attrNames packageRoots);
 
-      myPkgs = pkgs.extend (self: modifyPaths (pathsToModify "deep"));
+      deepPaths = pathsToModify "deep";
+      shallowPaths = pathsToModify "shallow";
 
-      basePkgs = modifyPaths (pathsToModify "shallow") myPkgs;
+      myPkgs = pkgs.extend (self: modifyPaths deepPaths);
+
+      basePkgs = modifyPaths shallowPaths myPkgs;
 
       baseScope = basePkgs // basePkgs.xorg;
 
@@ -474,26 +493,28 @@ in let
 
                 extraScope = lib.optionalAttrs (packageSets.${setName}.callScopeAttr != null) packageSetScope;
 
-                channels =
-                  let original = lib.mapAttrs (channel: value: ownScope) channelPackageSpecs;
-                  in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
-
-                meta = createMeta {
-                  inherit channels ownChannel importingChannel scope ownScope;
-                  exprPath = spec.exprPath;
-                };
-
                 # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
                 # A callPackage abstraction that allows specifying multiple attribute sets might be nice
                 createScope = isOwn:
-                  baseScope' // extraScope // lib.optionalAttrs isOwn {
-                    ${pname} = superPackage;
-                  } // {
-                    # These attributes are reserved
-                    inherit channels meta;
-                    flox = ownScope;
-                    callPackage = lib.callPackageWith scope;
-                  };
+                  let
+                    channels =
+                      let original = lib.mapAttrs (channel: value: result) channelPackageSpecs;
+                      in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
+
+                    result =
+                      baseScope' // extraScope // lib.optionalAttrs isOwn {
+                        ${pname} = superPackage;
+                      } // {
+                        # These attributes are reserved
+                        inherit channels;
+                        meta = createMeta {
+                          inherit channels ownChannel importingChannel scope ownScope;
+                          exprPath = spec.exprPath;
+                        };
+                        flox = result;
+                        callPackage = lib.callPackageWith scope;
+                      };
+                  in result;
 
                 ownScope = createScope true;
                 scope = createScope false;
@@ -515,12 +536,13 @@ in let
         )
       ) channelPackageSpecs;
     in {
-      inherit called baseScope basePkgs;
+      inherit called baseScope basePkgs outputs;
       pkgs = myPkgs;
     }
   ) channelPackageSpecs;
 
   inherit (import ./modifyPaths.nix { inherit lib; }) modifyPaths;
+  inherit (import ./nestedListToAttrs.nix { inherit lib; }) nestedListToAttrs;
 
   # FIXME: Custom callPackageWith that ensures default arguments aren't autopassed
   callPackageWith = lib.callPackageWith;
@@ -533,7 +555,7 @@ in let
 
   # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
 in builtins.seq name {
-  outputs = perImportingChannel.${rootChannel}.basePkgs // {
+  outputs = perImportingChannel.${rootChannel}.outputs // {
     pkgs = perImportingChannel.${rootChannel}.pkgs;
   };
   inherit packageRoots;
