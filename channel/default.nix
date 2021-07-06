@@ -498,7 +498,12 @@ in let
                 createScope = isOwn:
                   let
                     channels =
-                      let original = lib.mapAttrs (channel: value: result) channelPackageSpecs;
+                      let
+                        original = lib.mapAttrs (channel: value:
+                          lib.mapAttrs (pname:
+                            lib.warn "Accessing channel.${name}.${pname} from ${spec.exprPath}. This is discouraged and could lead to infinite recursion. Add ${pname} to the argument list directly instead."
+                          ) result
+                        ) channelPackageSpecs;
                       in original // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
 
                     result =
@@ -511,7 +516,7 @@ in let
                           inherit channels ownChannel importingChannel scope ownScope;
                           exprPath = spec.exprPath;
                         };
-                        flox = result;
+                        flox = channels.flox;
                         callPackage = lib.callPackageWith scope;
                       };
                   in result;
