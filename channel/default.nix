@@ -409,12 +409,17 @@ in let
     let
       lDrv = lib.isDerivation l;
       rDrv = lib.isDerivation r;
+      same = builtins.tryEval (lDrv == rDrv);
       prettyPath = lib.concatStringsSep "." path;
       warning = "Overriding ${lib.optionalString (!lDrv) "non-"}derivation ${
           lib.concatStringsSep "." path
         } in nixpkgs"
         + " with a ${lib.optionalString (!rDrv) "non-"}derivation in channel";
-    in if lDrv == rDrv then
+    in
+    # Protect against throw's in the thing to be overridden
+    # TODO: I don't think this should be necessary since we know that we want to override packages completely
+    if ! same.success then true
+    else if same.value then
     # If both sides are derivations, override completely
       if rDrv then
         withVerbosity 7 (builtins.trace
@@ -469,7 +474,7 @@ in let
               can = self: super: overlaySetFun super canonicalPath (superSet:
                 let
                   overridingSet = lib.mapAttrs (pname: spec:
-                    if spec.${type} == null then superSet.${pname} or null
+                    if spec.${type} == null then builtins.trace "No ${type} override for ${pname}, using nixpkgs version" (superSet.${pname} or null)
                     else called.${spec.${type}}.${setName}.${version}.${pname}
                   ) packageRoots.${setName};
                 in
