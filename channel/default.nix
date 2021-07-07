@@ -26,6 +26,7 @@
 let topdir' = topdir;
 in let
 
+
   # The dependencies of this channel, in the form { <channel> = null; }
   # Includes nixpkgs, doesn't include own channel
 
@@ -47,6 +48,8 @@ in let
   # also used as a base set for all channels themselves
   pkgs = import <nixpkgs> nixpkgsArgs;
   inherit (pkgs) lib;
+
+  utils = import ./utils { inherit lib; };
 
   withVerbosity = level: fun: val:
     if debugVerbosity >= level then fun val else val;
@@ -95,7 +98,7 @@ in let
       } else {
         failure = ''Directory name of topdir is just "floxpkgs"'';
       };
-      gitConfig = import ./nameFromGit.nix { inherit lib topdir; };
+      gitConfig = utils.nameFromGit topdir;
       #nixPath = let
       #  matchingEntries = lib.filter (e: e.path == topdir) channelFloxpkgsList;
       #  matchingNames = lib.unique (map (e: e.name) matchingEntries);
@@ -412,7 +415,7 @@ in let
   perImportingChannel = lib.mapAttrs (importingChannel: _:
     let
       outputs = lib.mapAttrs (ownChannel: _:
-        nestedListToAttrs (lib.concatMap (setName:
+        utils.nestedListToAttrs (lib.concatMap (setName:
           lib.concatMap (version:
             let
               value = called.${ownChannel}.${setName}.${version};
@@ -458,9 +461,9 @@ in let
       deepPaths = pathsToModify "deep";
       shallowPaths = pathsToModify "shallow";
 
-      myPkgs = pkgs.extend (self: modifyPaths deepPaths);
+      myPkgs = pkgs.extend (self: utils.modifyPaths deepPaths);
 
-      basePkgs = modifyPaths shallowPaths myPkgs;
+      basePkgs = utils.modifyPaths shallowPaths myPkgs;
 
       baseScope = basePkgs // basePkgs.xorg;
 
@@ -552,8 +555,6 @@ in let
     }
   ) channelPackageSpecs;
 
-  inherit (import ./modifyPaths.nix { inherit lib; }) modifyPaths;
-  inherit (import ./nestedListToAttrs.nix { inherit lib; }) nestedListToAttrs;
 
   # FIXME: Custom callPackageWith that ensures default arguments aren't autopassed
   callPackageWith = lib.callPackageWith;
