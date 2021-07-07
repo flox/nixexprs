@@ -12,6 +12,7 @@
 
 # Arguments for the command line
 { name ? null, debugVerbosity ? 0
+, subsystemVerbosities ? {}
   # JSON string of a `<channelName> -> <projectName> -> <srcpath>` mapping. This overrides the sources used by these channels/projects to the given paths.
 , sourceOverrideJson ? "{}", _return ? "outputs"
   # Used to detect whether this default.nix is a channel (by inspecting function arguments)
@@ -51,8 +52,10 @@ in let
 
   utils = import ./utils { inherit lib; };
 
-  withVerbosity = level: fun: val:
-    if debugVerbosity >= level then fun val else val;
+  trace = utils.traceWith {
+    defaultVerbosity = debugVerbosity;
+    inherit subsystemVerbosities;
+  };
 
   # A list of { name; success | failure } entries, representing heuristics used
   # to determine the channel name, in the order of preference
@@ -134,14 +137,13 @@ in let
       success = lib.warn fallbackNameWarning "_unknown";
     };
     firstSuccess = lib.findFirst (e: e ? success) fallback nameHeuristics;
-  in withVerbosity 2 (builtins.trace
-    "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}")
+  in trace "name" 2
+    "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}"
   firstSuccess.success;
 
   myChannelArgs = {
-    inherit name topdir extraOverlays;
+    inherit name topdir _floxPathDepth;
     dependencies = dependencies';
-    inherit _floxPathDepth;
   };
 
   closure =
@@ -151,15 +153,20 @@ in let
         value = myChannelArgs;
       };
 
-      getChannel = name: import (builtins.findFile builtins.nixPath name) {
-        inherit name;
-        _return = "channelArguments";
-      };
+      getChannel = name:
+        let
+          path = builtins.tryEval (builtins.findFile builtins.nixPath name);
+        in
+        if ! path.success then throw "Channel \"${name}\" wasn't found in NIX_PATH"
+        else import path.value {
+          inherit name debugVerbosity subsystemVerbosities;
+          _return = "channelArguments";
+        };
 
       operator = entry: map (name:
         if name == "nixpkgs"
         then throw "Channel ${entry.key} has \"nixpkgs\" specified as a dependency, which is not necessary"
-        else {
+        else trace "closure" 2 "Channel ${entry.key} depends on ${name}" {
           key = name;
           value = getChannel name;
         }
@@ -169,7 +176,7 @@ in let
         startSet = [ root ];
         operator = operator;
       };
-    in result;
+    in trace "closure" 1 "Determining channel closure" result;
 
   dependencyGraph = pkgs.runCommandNoCC "floxpkgs-${name}-dependency-graph" {
     graph = ''
@@ -205,7 +212,7 @@ in let
   # - deep: In case of directories, whether there is a deep-override file within it. For files always false
   # - path: The path to the Nix directory/file that was imported
   # - type: The file type, either "regular" for files or "directory" for directories
-  dirToAttrs = context: dir:
+  dirToAttrs = trace: dir:
     let
       exists = builtins.pathExists dir;
 
@@ -236,27 +243,18 @@ in let
       entryAttrs =
         lib.listToAttrs (lib.sort (a: b: a.value.type == "regular") entries);
 
-      message = ''
-        ${context} Importing all Nix expressions from directory "${
-          toString dir
-        }"'' + withVerbosity 6
-        (_: ". Attributes: ${toString (lib.attrNames entryAttrs)}") "";
-
       result = if exists then
-        withVerbosity 4 (builtins.trace message) entryAttrs
+        trace "dirToAttrs" 4 "Importing these attributes from directory: ${lib.concatStringsSep ", " (lib.attrNames entryAttrs)}" entryAttrs
       else
-        withVerbosity 5 (builtins.trace
-          "${context} Not importing any Nix expressions because `${
-            toString dir
-          }` does not exist") { };
+        trace "dirToAttrs" 5 "Not importing any attributes because the directory doesn't exist" { };
 
-    in result;
+    in trace "test" 5 "hello" result;
 
   rootChannel = name;
 
   pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
   pregenResult = if builtins.pathExists pregenPath then
-    withVerbosity 1 (builtins.trace "Reusing pregenerated ${pregenPath}")
+    trace "pregen" 1 "Reusing pregenerated ${pregenPath}"
     (lib.importJSON pregenPath)
   else
     lib.warn
@@ -327,7 +325,7 @@ in let
             else if lib.length attrs == 1 then lib.head attrs
             else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${name}, ${toString attrs}";
         in result;
-    }) (dirToAttrs setName (topdir + "/${setName}"))
+    }) (dirToAttrs (trace.setContext "dir" "${name}/${setName}") (topdir + "/${setName}"))
   ) packageSets;
 
 
@@ -342,7 +340,10 @@ in let
     name = entry.key;
     # Gets the package specs of each channel, passing it the packageChannels
     # evaluated from the root channel to share work
-    value = import entry.value.topdir { _return = "ownPackageSpecs"; } packageChannels;
+    value = import entry.value.topdir {
+      _return = "ownPackageSpecs";
+      inherit debugVerbosity subsystemVerbosities;
+    } packageChannels;
   }) closure);
 
   /*
@@ -522,7 +523,7 @@ in let
                         # These attributes are reserved
                         inherit channels;
                         meta = createMeta {
-                          inherit channels ownChannel importingChannel scope ownScope;
+                          inherit trace channels ownChannel importingChannel scope ownScope;
                           exprPath = spec.exprPath;
                         };
                         flox = channels.flox;
@@ -561,7 +562,7 @@ in let
 
   createMeta = pkgs.callPackage ./meta.nix {
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
-    inherit dirToAttrs withVerbosity callPackageWith;
+    inherit dirToAttrs callPackageWith;
     floxPathDepth = _floxPathDepth;
   };
 

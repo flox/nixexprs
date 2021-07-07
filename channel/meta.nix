@@ -1,4 +1,4 @@
-{ pkgs, lib, sourceOverrides, withVerbosity, dirToAttrs, callPackageWith, floxPathDepth }:
+{ pkgs, lib, sourceOverrides, dirToAttrs, callPackageWith, floxPathDepth }:
 let
   getChannelSource = pkgs.callPackage ./getSource.nix {
     inherit sourceOverrides;
@@ -10,6 +10,7 @@ in
 , exprPath
 , scope
 , ownScope
+, trace
 }: {
   inherit getChannelSource;
   getSource = getChannelSource ownChannel;
@@ -19,12 +20,13 @@ in
     (getChannelSource importingChannel);
   inherit importingChannel ownChannel;
 
-  inherit withVerbosity scope channels;
+  withVerbosity = throw "meta.withVerbosity was removed, use `meta.trace <subsystem> <verbosity> <message> <value>` instead";
+  inherit trace scope channels;
 
   mapDirectory = dir:
     { call ? path: callPackageWith scope path { } }:
     lib.mapAttrs (name: value: call value.path)
-    (dirToAttrs "mapDirectory ${baseNameOf dir}" dir);
+    (dirToAttrs (trace.setContext "mapDirectory" (baseNameOf dir)) dir);
 
   importNix =
     { channel ? importingChannel, project, path, ... }@args:
