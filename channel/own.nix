@@ -55,6 +55,17 @@ let
           # Note that we only allow immediate dependencies here because ideally
           # a channel would not depend on transitive attributes
           attrs = lib.attrNames (builtins.intersectAttrs superDependencyAttrs packageChannels.${setName}.${pname});
+
+          inlineOptions =
+            let
+              existsInNixpkgs = lib.elem "nixpkgs" attrs;
+              attrsWithoutNixpkgs = lib.remove "nixpkgs" attrs;
+            in lib.concatMapStringsSep ", " lib.strings.escapeNixIdentifier attrsWithoutNixpkgs + lib.optionalString existsInNixpkgs " and nixpkgs itself";
+
+          options = lib.concatMapStrings (entry: ''
+            conflictResolution.${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} = "${entry}";
+          '') attrs;
+
           result =
             # If this channel specifies a conflict resolution for this package, use that directly
             if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname}
@@ -62,7 +73,7 @@ let
             else if lib.length attrs == 0 then null
             # But if there's only a single channel (or nixpkgs) providing it, we use that directly, no need for conflict resolution
             else if lib.length attrs == 1 then lib.head attrs
-            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${channelName}, ${toString attrs}";
+            else throw "In channel ${channelName}, the package \"${setName}.${pname}\" declared in ${value.path} uses \"${pname}\" from its arguments, which refers to the same package from another channel. However, it is ambiguous which channel it should point to since the package exists in channels ${inlineOptions}. This conflict needs to be resolved by adding one of the following lines to the passed attribute set in ${toString firstArgs.topdir}/default.nix:\n${options}";
         in result;
     }) (utils.dirToAttrs (trace.setContext "dir" "${channelName}/${setName}") (topdir + "/${setName}"))
   ) packageSets;

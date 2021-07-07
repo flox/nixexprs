@@ -196,32 +196,111 @@ let
     in result
   ) packageSets;
 
-  packageRoots = lib.mapAttrs (setName: setValue:
+  /*
+  Gives a mapping from package to the channel it should come from, for both
+  deep and shallow packages. Absence of a package is indicated by a `{}`,
+  which is done in order to allow knowing whether it exists without having
+  to know where it comes from. Not doing this slows down things considerably
+
+  {
+    <packageSet>.<pname> = {
+      deep = {} | { channel = <channel>; };
+      shallow = {} | { channel = <channel>; };
+    };
+  }
+  */
+  packageRoots = lib.mapAttrs (setName:
     lib.mapAttrs (pname: channels:
       let
         existsInNixpkgs = channels ? nixpkgs;
+
+        # All the channels that define this package
         channelList = lib.attrNames (removeAttrs channels [ "nixpkgs" ]);
+
+        # Split the channels into deep (.right) and non-deep (.wrong)
         split = lib.partition (channel: channelPackageSpecs.${channel}.${setName}.${pname}.deep) channelList;
 
         root = deep: entries:
           if entries == [] then {}
           else {
             channel =
-              # Otherwise, if some channel overrides it, disallow that if the package doesn't exist in nixpkgs already
-              if deep && ! existsInNixpkgs then throw "Can't deeply override attribute ${setName}.${pname} that doesn't exist in nixpkgs"
-              # The root channel takes precedence
-              else if lib.elem rootChannelName entries then rootChannelName
-              else if firstArgs ? conflictResolution.${setName}.${pname} then firstArgs.conflictResolution.${setName}.${pname} # TODO: Validate that this option exists
-              # Only when we have a single entry and it doesn't exist in nixpkgs, we can have an automatic conflict-free resolution
-              else if lib.length entries == 1 && (lib.head entries == "flox" || ! existsInNixpkgs) then lib.head entries
-              else throw "conflictResolution needs to be provided for ${setName}.${pname} in channel ${rootChannelName}. Options are ${toString entries + lib.optionalString existsInNixpkgs " nixpkgs"}";
+              let
+                options =
+                  lib.optionalString existsInNixpkgs ''
+                    conflictResolution.${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} = "nixpkgs";
+                  ''
+                  + lib.concatMapStrings (entry: ''
+                    conflictResolution.${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} = "${entry}";
+                  '') entries;
+
+                resolution = firstArgs.conflictResolution.${setName}.${pname};
+                invalidResolution = reason: throw
+                  ("The conflict resolution for package \"${setName}.${pname}\" "
+                  + "is set to \"${resolution}\", which is not a valid option "
+                  + "because ${reason}. Change the conflict resolution for this "
+                  + "package in ${toString firstArgs.topdir}/default.nix to be "
+                  + "one of the following lines instead:\n${options}");
+              in
+              # We don't allow deep overrides for packages that don't exist in
+              # nixpkgs already, because doing so would allow channels we
+              # depend on to change nixpkgs behavior without the user having
+              # to confirm it. This works by means of detecting _whether_
+              # package attributes are there or not, without evaluating them,
+              # which could allow a vulnerability in which upstream nixpkgs is
+              # injected with some code that only triggers when a certain
+              # attribute is there
+              if deep && ! existsInNixpkgs then throw
+                ("The package \"${setName}.${pname}\" in channel "
+                + "\"${lib.head entries}\" is specified as `deep-override`-ing, "
+                + "but this package doesn't exist in nixpkgs. Only packages "
+                + "that exist in nixpkgs can be deeply overridden.")
+
+              # If the root channel specifies this package, that takes precedence
+              # This allows the root channel to override any attribute of any
+              # other channel, without the user having to confirm this
+              else if lib.elem rootChannelName entries then
+                rootChannelName
+
+              # If a conflict resolution has been provided for this package,
+              # use it, after ensuring it's a valid option
+              else if firstArgs ? conflictResolution.${setName}.${pname} then
+                if resolution == "nixpkgs" then
+                  if existsInNixpkgs then resolution
+                  else invalidResolution "nixpkgs doesn't have this package"
+                else if ! channelPackageSpecs ? ${resolution} then
+                  invalidResolution "the channel \"${resolution}\" doesn't exist"
+                else if lib.elem resolution entries then resolution
+                else
+                  invalidResolution "the channel \"${resolution}\" doesn't have this package"
+
+              # If no conflict resolution has provided, but we only have a
+              # single entry anyways, we can use that. However, if the
+              # attribute also exists in nixpkgs, we essentially have two
+              # entries then. We only allow this if the _flox_ channel is the
+              # one channel, since we trust ourselves to override nixpkgs
+              # attributes correctly
+              else if lib.length entries == 1
+                && (existsInNixpkgs -> lib.head entries == "flox") then
+                lib.head entries
+
+              # Otherwise we throw an error that the conflict needs to be
+              # resolved manually
+              else throw
+                ("The package \"${setName}.${pname}\" is declared multiple "
+                + "times ${lib.optionalString deep "as `deep-override`-ing "}"
+                + "in channels ${lib.concatMapStringsSep ", "
+                  lib.strings.escapeNixIdentifier entries}"
+                + "${lib.optionalString existsInNixpkgs " and nixpkgs itself"}. "
+                + "This conflict needs to be resolved by adding one of the "
+                + "following lines to the passed attribute set in "
+                + "${toString firstArgs.topdir}/default.nix:\n${options}");
           };
 
       in {
         deep = root true split.right;
         shallow = root false split.wrong;
       }
-    ) setValue
+    )
   ) packageChannels;
 
   # FIXME: Custom callPackageWith that ensures default arguments aren't autopassed
@@ -242,13 +321,19 @@ let
           let
             canonicalPath = packageSets.${setName}.versions.${version}.canonicalPath;
 
-            overridingSet = lib.mapAttrs (pname: spec:
-              channelPackages.${spec.${type}.channel}.perPackageSet.${setName}.${version}.${pname}
-            ) (lib.filterAttrs (pname: spec: spec.${type} != {}) packageRoots.${setName});
+            existingRoots = lib.filterAttrs (pname: spec:
+              spec.${type} != {}
+            ) packageRoots.${setName};
 
             canonical = {
               path = canonicalPath;
               mod = super:
+                let
+                  overridingSet = lib.mapAttrs (pname: spec:
+                    if spec.${type}.channel == "nixpkgs" then super.${pname}
+                    else channelPackages.${spec.${type}.channel}.perPackageSet.${setName}.${version}.${pname}
+                  ) existingRoots;
+                in
                 if type == "deep"
                 then packageSets.${setName}.deepOverride super overridingSet
                 else super // overridingSet;
