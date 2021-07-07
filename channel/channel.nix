@@ -13,15 +13,6 @@
 }:
 let
 
-  channels =
-    let
-      original = lib.mapAttrs (channel: value:
-        lib.mapAttrs (pname:
-          lib.warn "Accessing channel.${channel}.${pname} from channel ${ownChannel}. This is discouraged as it circumvents the conflict resolution mechanism. Add ${pname} to the argument list directly instead."
-        ) value.attributes
-      ) dependencySet.channelPackages;
-      lowered = lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) original;
-    in original // lowered;
 
   perPackageSet = lib.mapAttrs (setName: packages:
     let
@@ -37,14 +28,36 @@ let
           ${callScopeAttr} = finalSet;
         });
 
-        channels' =
-          if callScopeAttr == null then channels
-          else lib.mapAttrs (channel: value:
-            value // {
-              ${callScopeAttr} = lib.getAttrFromPath versionInfo.canonicalPath value;
-            }
-          ) channels;
+        createChannels = file:
+          let
+            channelAttrsCased = lib.mapAttrs (channel: value:
+              value.attributes // lib.optionalAttrs (callScopeAttr != null) {
+                ${callScopeAttr} = lib.getAttrFromPath versionInfo.canonicalPath value.attributes;
+              }
+            ) dependencySet.channelPackages;
 
+            channelAttrs = channelAttrsCased // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) channelAttrsCased;
+
+            withWarningPrefix = prefix: lib.mapAttrs (attr:
+              lib.warn (
+                "In ${file}, `${lib.concatStringsSep "." prefix}.${attr}` is "
+                + "accessed, which is discouraged because it circumvents "
+                + "potential package conflicts between channels. Please use "
+                + "`${attr}` directly by adding it to the argument list at "
+                + "the top of the file if it doesn't exist already, and "
+                + "remove the `${lib.head prefix}` argument. The `${attr}` "
+                + "argument contains the definitions from all channels and "
+                + "gives a conflict warning if multiple channels define the "
+                + "same package.")
+            );
+          in {
+            channels = lib.mapAttrs (name: withWarningPrefix [ "channels" name ]) channelAttrs;
+            flox = withWarningPrefix [ "flox" ] channelAttrs.flox;
+          };
+
+        # Basically the same as accessing individual channels from
+        # createChannels, except that this is safe, and we don't need to
+        # mess with attribute names
         # TODO: Cover this with tests
         perChannelPackages = lib.mapAttrs (channel: value:
           value.${setName}.${version}.perPackageSet
@@ -55,7 +68,7 @@ let
           inherit lib trace floxPathDepth;
           inherit spec pname perChannelPackages originalSet overlaidSet createMeta ownChannel;
           baseScope = baseScope';
-          channels = channels';
+          inherit createChannels;
         }
       ) packages
     ) packageSets.${setName}.versions

@@ -9,13 +9,18 @@
 , originalSet
 , overlaidSet
 , baseScope
-, channels
+, createChannels
 }:
 let
 
+  file =
+    if builtins.pathExists (spec.exprPath + "/default.nix")
+    then spec.exprPath + "/default.nix"
+    else spec.exprPath;
+
   superPackage =
     if spec.extends == null then
-      throw "${pname} is accessed in ${spec.exprPath}, but is not defined because nixpkgs has no ${pname} attribute"
+      throw "${pname} is accessed in ${file}, but is not defined because nixpkgs has no ${pname} attribute"
     else if spec.extends == "nixpkgs" then
       if spec.deep then originalSet.${pname} else overlaidSet.${pname}
     else if ! perChannelPackages ? ${spec.extends} then
@@ -24,6 +29,8 @@ let
       throw "extends package ${pname} doesn't exist in channel ${spec.extends}"
     else perChannelPackages.${spec.extends}.${pname};
 
+  inherit (createChannels file) channels flox;
+
   # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
   # A callPackage abstraction that allows specifying multiple attribute sets might be nice
   createScope = isOwn:
@@ -31,12 +38,10 @@ let
       ${pname} = superPackage;
     } // {
       # These attributes are reserved
-      inherit channels;
+      inherit channels flox;
       meta = createMeta {
-        inherit trace ownChannel channels scope ownScope;
-        exprPath = spec.exprPath;
+        inherit file trace ownChannel channels scope ownScope;
       };
-      flox = channels.flox;
       callPackage = lib.callPackageWith scope;
     };
 

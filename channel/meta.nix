@@ -7,7 +7,7 @@ in
 importingChannel:
 { channels
 , ownChannel
-, exprPath
+, file
 , scope
 , ownScope
 , trace
@@ -37,7 +37,7 @@ importingChannel:
         fullPath
       else
         throw
-        "`meta.importNix` in ${exprPath}: File ${path} doesn't exist in source for project ${project} in channel ${importingChannel}";
+        "`meta.importNix` in ${file}: File ${path} doesn't exist in source for project ${project} in channel ${importingChannel}";
     in {
       # flox edit should edit the path specified here
       _floxPath = fullPath;
