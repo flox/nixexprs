@@ -4,9 +4,9 @@ let
     inherit sourceOverrides;
   };
 in
-{ importingChannel
+importingChannel:
+{ channels
 , ownChannel
-, channels
 , exprPath
 , scope
 , ownScope

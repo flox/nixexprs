@@ -1,1 +1,1 @@
-(import <test> { }).pkgs.ncurses.result
+(import <test> { }).channelInfo.overlaidPkgs.ncurses.result

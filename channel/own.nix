@@ -1,14 +1,14 @@
-{ lib
-, name
-, firstArgs
-, secondArgs
+{ firstArgs
+, channelName
+, lib
 , utils
 , trace
 , packageSets
+, packageChannels
 }:
 let
 
-  topdir = toString firstArgs.topdir;
+  topdir = toString (firstArgs.topdir or (throw "Channel ${channelName} provided no \"topdir\" argument in its default.nix file"));
 
   fileDeps =
     if builtins.pathExists (topdir + "/channels.json")
@@ -19,9 +19,9 @@ let
 
   conflictResolution = firstArgs.conflictResolution or {};
 
-  dependencies = lib.unique (lib.subtractLists [ name "nixpkgs" ] (fileDeps ++ argDeps ++ [ "flox" ]));
+  dependencies = lib.unique (lib.subtractLists [ channelName "nixpkgs" ] (fileDeps ++ argDeps ++ [ "flox" ]));
 
-  dependencyAttrs = removeAttrs (lib.genAttrs (dependencies ++ [ "nixpkgs" ]) (name: null)) [ name ];
+  dependencyAttrs = removeAttrs (lib.genAttrs (dependencies ++ [ "nixpkgs" ]) (name: null)) [ channelName ];
 
   /*
   Returns all the package specifications in our own channel. To determine the
@@ -30,7 +30,7 @@ let
   `packageChannels` argument. This argument is passed by the root channel, in
   order to not duplicate the work of determining its value.
   */
-  packageSpecs = packageChannels: lib.mapAttrs (setName: packageSet:
+  packageSpecs = lib.mapAttrs (setName: packageSet:
     lib.mapAttrs (pname: value: {
       deep = value.deep;
       exprPath = value.path;
@@ -51,9 +51,9 @@ let
             else if lib.length attrs == 0 then null
             # But if there's only a single channel (or nixpkgs) providing it, we use that directly, no need for conflict resolution
             else if lib.length attrs == 1 then lib.head attrs
-            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${name}, ${toString attrs}";
+            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${channelName}, ${toString attrs}";
         in result;
-    }) (utils.dirToAttrs (trace.setContext "dir" "${name}/${setName}") (topdir + "/${setName}"))
+    }) (utils.dirToAttrs (trace.setContext "dir" "${channelName}/${setName}") (topdir + "/${setName}"))
   ) packageSets;
 in {
   inherit packageSpecs dependencies;
