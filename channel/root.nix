@@ -1,25 +1,6 @@
-firstArgs: secondArgs:
-
-## Arguments for the command line
-#{ name ? null
-## Default verbosity of trace messages
-#, debugVerbosity ? 0
-## Override of the verbosity of trace message for specific subsystems
-#, subsystemVerbosities ? {}
-## JSON string of a `<channelName> -> <projectName> -> <srcpath>` mapping. This overrides the sources used by these channels/projects to the given paths.
-#, sourceOverrideJson ? "{}"
-## When evaluating for an attributes _floxPath, passing a lower number in
-## this argument allows for still getting a result in case of failing
-## evaluation, at the expense of a potentially less precise result. The
-## highest number not giving evaluation failures should be used
-#, _floxPathDepth ? 2
-## When this channel is imported from another channel, this flag is set to false
-#, _isRoot ? true
-## Passed when _isRoot = false in order to allow imported channels to have
-## access to evaluations made by the root channel
-#, _fromRoot ? null
-## Allow passing other arguments for nixpkgs pkgs/top-level/release-lib.nix compatibility
-#, ... }@secondArgs:
+# Arguments are described in ./default.nix
+firstArgs:
+secondArgs:
 let
 
   floxPathDepth = secondArgs._floxPathDepth or 2;
@@ -80,30 +61,34 @@ let
 
   channelClosure =
     let
-      root = {
-        key = rootChannelName;
-        value = ownResult;
+      sanitizeResult = name: result: {
+        dependencies = lib.unique (lib.subtractLists [ "nixpkgs" name ] (result.dependencies ++ [ "flox" ]));
+        packageSpecs = result.packageSpecs;
       };
 
-      getChannel = name:
+      root = {
+        key = rootChannelName;
+        value = sanitizeResult rootChannelName ownResult;
+      };
+
+      getChannel = origin: name:
         let
           path = builtins.tryEval (builtins.findFile builtins.nixPath name);
-        in
-        if ! path.success then throw "Channel \"${name}\" wasn't found in NIX_PATH"
-        else import path.value {
-          _isRoot = false;
-          _fromRoot = {
-            channelName = name;
-            inherit lib utils trace packageSets packageChannels;
+          imported = import path.value {
+            _isRoot = false;
+            _fromRoot = {
+              channelName = name;
+              inherit lib utils trace packageSets packageChannels;
+            };
           };
-        };
+        in
+        if ! path.success then throw "Channel \"${name}\" as declared as a dependency in channel \"${origin}\" can't found in NIX_PATH"
+        else sanitizeResult name imported;
 
       operator = entry: map (name:
-        if name == "nixpkgs"
-        then throw "Channel ${entry.key} has \"nixpkgs\" specified as a dependency, which is not necessary"
-        else trace "closure" 2 "Channel ${entry.key} depends on ${name}" {
+        trace "closure" 2 "Channel ${entry.key} depends on ${name}" {
           key = name;
-          value = getChannel name;
+          value = getChannel entry.key name;
         }
       ) entry.value.dependencies;
 

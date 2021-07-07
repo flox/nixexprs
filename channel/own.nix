@@ -8,29 +8,40 @@
 }:
 let
 
-  topdir = toString (firstArgs.topdir or (throw "Channel ${channelName} provided no \"topdir\" argument in its default.nix file"));
+  topdir = toString firstArgs.topdir;
 
-  fileDeps =
-    if builtins.pathExists (topdir + "/channels.json")
-    then builtins.fromJSON (builtins.readFile (topdir + "/channels.json"))
-    else [];
+  # Cleaned up dependency list
+  dependencies =
+    let
+      dependencyFile = topdir + "/channels.json";
 
-  argDeps = firstArgs.dependencies or [];
+      fileDeps =
+        if builtins.pathExists dependencyFile
+        then lib.importJSON dependencyFile
+        else [];
+
+      argDeps = firstArgs.dependencies or [];
+
+      # We need to be able to handle flox, nixpkgs and own channel entries here
+      # even if provided by another flox channel provider
+      # Also we want nixpkgs to be in the list for determining the extends
+      allDeps = fileDeps ++ argDeps ++ [ "flox" "nixpkgs" channelName ];
+
+    in allDeps;
+
+  # Dependencies of this channel, but only ones where we could get the super
+  # version of packages from
+  # This notably means that nixpkgs _needs_ to be included, which it is from
+  # the above dependencies declaration
+  superDependencyAttrs = removeAttrs (lib.genAttrs dependencies (name: null)) [
+    # This means that the channel itself can't be included here
+    channelName
+  ];
 
   conflictResolution = firstArgs.conflictResolution or {};
 
-  dependencies = lib.unique (lib.subtractLists [ channelName "nixpkgs" ] (fileDeps ++ argDeps ++ [ "flox" ]));
-
-  dependencyAttrs = removeAttrs (lib.genAttrs (dependencies ++ [ "nixpkgs" ]) (name: null)) [ channelName ];
-
-  /*
-  Returns all the package specifications in our own channel. To determine the
-  `extends` fields for each package, it is necessary to know which other
-  channels provide the same package, which is why this function takes a
-  `packageChannels` argument. This argument is passed by the root channel, in
-  order to not duplicate the work of determining its value.
-  */
-  packageSpecs = lib.mapAttrs (setName: packageSet:
+  # Returns all the package specifications in our own channel
+  packageSpecs = lib.mapAttrs (setName: _:
     lib.mapAttrs (pname: value: {
       deep = value.deep;
       exprPath = value.path;
@@ -43,7 +54,7 @@ let
           # that contain the same package to the ones we depend on
           # Note that we only allow immediate dependencies here because ideally
           # a channel would not depend on transitive attributes
-          attrs = lib.attrNames (builtins.intersectAttrs dependencyAttrs packageChannels.${setName}.${pname});
+          attrs = lib.attrNames (builtins.intersectAttrs superDependencyAttrs packageChannels.${setName}.${pname});
           result =
             # If this channel specifies a conflict resolution for this package, use that directly
             if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname}
