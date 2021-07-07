@@ -3,10 +3,7 @@
 , topdir
 # FIXME: Deprecation warning
 , extraOverlays ? null
-, dependencies ?
-  if builtins.pathExists (topdir + "/channels.json")
-  then builtins.fromJSON (builtins.readFile (topdir + "/channels.json"))
-  else []
+, dependencies ? null
 , conflictResolution ? {}
 }@chanArgs:
 
@@ -26,12 +23,6 @@
 , ... }@args:
 let topdir' = topdir;
 in let
-
-
-  # The dependencies of this channel, in the form { <channel> = null; }
-  # Includes nixpkgs, doesn't include own channel
-
-  dependencies' = lib.unique (lib.subtractLists [ name "nixpkgs" ] dependencies ++ [ "flox" ]);
 
 
   # To prevent any accidental imports into the store, and to make sure it's a string, not a path
@@ -141,16 +132,11 @@ in let
     "Determined root channel name to be ${firstSuccess.success} with heuristic ${firstSuccess.name}"
   firstSuccess.success;
 
-  myChannelArgs = {
-    inherit name topdir _floxPathDepth;
-    dependencies = dependencies';
-  };
-
   closure =
     let
       root = {
         key = name;
-        value = myChannelArgs;
+        value = own;
       };
 
       getChannel = name:
@@ -160,7 +146,7 @@ in let
         if ! path.success then throw "Channel \"${name}\" wasn't found in NIX_PATH"
         else import path.value {
           inherit name debugVerbosity subsystemVerbosities;
-          _return = "channelArguments";
+          _return = "own";
         };
 
       operator = entry: map (name:
@@ -201,54 +187,6 @@ in let
     EOF
     chmod +x $out/view
   '';
-
-  # Turns a directory into an attribute set.
-  # Files with a .nix suffix get turned into an attribute name without the
-  # suffix. Directories get turned into an attribute of their name directly.
-  # If there is both a .nix file and a directory with the same name, the file
-  # takes precedence. The context argument is a string shown in trace messages
-  # Each value in the resulting attribute sets has attributes
-  # - value: The Nix value of the file or of the default.nix file in the directory
-  # - deep: In case of directories, whether there is a deep-override file within it. For files always false
-  # - path: The path to the Nix directory/file that was imported
-  # - type: The file type, either "regular" for files or "directory" for directories
-  dirToAttrs = trace: dir:
-    let
-      exists = builtins.pathExists dir;
-
-      importPath = name: type:
-        let path = dir + "/${name}";
-        in {
-          directory = lib.nameValuePair name {
-            deep = builtins.pathExists (path + "/deep-override");
-            inherit path type;
-          };
-
-          regular = if lib.hasSuffix ".nix" name then
-            lib.nameValuePair (lib.removeSuffix ".nix" name) {
-              deep = false;
-              inherit path type;
-            }
-          else
-            null;
-        }.${type} or (throw "Can't auto-call file type ${type} at ${toString path}");
-
-      # Mapping from <package name> -> { value = <package fun>; deep = <bool>; }
-      # This caches the imports of the auto-called package files, such that they don't need to be imported for every version separately
-      entries = lib.filter (v: v != null)
-        (lib.attrValues (lib.mapAttrs importPath (builtins.readDir dir)));
-
-      # Regular files should be preferred over directories, so that e.g.
-      # foo.nix can be used to declare a further import of the foo directory
-      entryAttrs =
-        lib.listToAttrs (lib.sort (a: b: a.value.type == "regular") entries);
-
-      result = if exists then
-        trace "dirToAttrs" 4 "Importing these attributes from directory: ${lib.concatStringsSep ", " (lib.attrNames entryAttrs)}" entryAttrs
-      else
-        trace "dirToAttrs" 5 "Not importing any attributes because the directory doesn't exist" { };
-
-    in trace "test" 5 "hello" result;
 
   rootChannel = name;
 
@@ -293,41 +231,11 @@ in let
   }
   */
 
-  dependencyAttrs = removeAttrs (lib.genAttrs (dependencies' ++ [ "nixpkgs" ]) (name: null)) [ name ];
-
-  /*
-  Returns all the package specifications in our own channel. To determine the
-  `extends` fields for each package, it is necessary to know which other
-  channels provide the same package, which is why this function takes a
-  `packageChannels` argument. This argument is passed by the root channel, in
-  order to not duplicate the work of determining its value.
-  */
-  ownPackageSpecs = packageChannels: lib.mapAttrs (setName: packageSet:
-    lib.mapAttrs (pname: value: {
-      deep = value.deep;
-      exprPath = value.path;
-      extends =
-        let
-          # Since we got the packageChannels from the root channel to share
-          # work, we will however also have a potential superset of only our
-          # own dependencies. We don't want non-dependencies to influence
-          # which channel we extend from though, so we limit the channels
-          # that contain the same package to the ones we depend on
-          # Note that we only allow immediate dependencies here because ideally
-          # a channel would not depend on transitive attributes
-          attrs = lib.attrNames (builtins.intersectAttrs dependencyAttrs packageChannels.${setName}.${pname});
-          result =
-            # If this channel specifies a conflict resolution for this package, use that directly
-            if conflictResolution ? ${setName}.${pname} then conflictResolution.${setName}.${pname}
-            # Otherwise, if no channel (or nixpkgs) has this attribute, we can't extend from anywhere
-            else if lib.length attrs == 0 then null
-            # But if there's only a single channel (or nixpkgs) providing it, we use that directly, no need for conflict resolution
-            else if lib.length attrs == 1 then lib.head attrs
-            else throw "Needs super conflict resolution for ${setName}.${pname} in channel ${name}, ${toString attrs}";
-        in result;
-    }) (dirToAttrs (trace.setContext "dir" "${name}/${setName}") (topdir + "/${setName}"))
-  ) packageSets;
-
+  own = import ./own.nix {
+    inherit lib utils trace name packageSets;
+    firstArgs = chanArgs;
+    secondArgs = args;
+  };
 
   /*
   Gives a package specification for each package in each channel.
@@ -340,10 +248,7 @@ in let
     name = entry.key;
     # Gets the package specs of each channel, passing it the packageChannels
     # evaluated from the root channel to share work
-    value = import entry.value.topdir {
-      _return = "ownPackageSpecs";
-      inherit debugVerbosity subsystemVerbosities;
-    } packageChannels;
+    value = entry.value.packageSpecs packageChannels;
   }) closure);
 
   /*
@@ -562,7 +467,7 @@ in let
 
   createMeta = pkgs.callPackage ./meta.nix {
     sourceOverrides = builtins.fromJSON sourceOverrideJson;
-    inherit dirToAttrs callPackageWith;
+    inherit utils callPackageWith;
     floxPathDepth = _floxPathDepth;
   };
 
@@ -574,9 +479,8 @@ in builtins.seq name {
   inherit packageRoots;
   inherit channelPackageSpecs;
   inherit perImportingChannel;
-  inherit ownPackageSpecs;
+  inherit own;
   inherit packageChannels;
   inherit packageSets;
   inherit dependencyGraph;
-  channelArguments = myChannelArgs;
 }.${_return}

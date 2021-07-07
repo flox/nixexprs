@@ -1,4 +1,4 @@
-{ pkgs, lib, sourceOverrides, dirToAttrs, callPackageWith, floxPathDepth }:
+{ pkgs, lib, sourceOverrides, utils, callPackageWith, floxPathDepth }:
 let
   getChannelSource = pkgs.callPackage ./getSource.nix {
     inherit sourceOverrides;
@@ -26,7 +26,7 @@ in
   mapDirectory = dir:
     { call ? path: callPackageWith scope path { } }:
     lib.mapAttrs (name: value: call value.path)
-    (dirToAttrs (trace.setContext "mapDirectory" (baseNameOf dir)) dir);
+    (utils.dirToAttrs (trace.setContext "mapDirectory" (baseNameOf dir)) dir);
 
   importNix =
     { channel ? importingChannel, project, path, ... }@args:
