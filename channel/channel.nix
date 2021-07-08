@@ -65,7 +65,7 @@ let
       in
       lib.mapAttrs (pname: spec:
         import ./package.nix {
-          inherit lib trace floxPathDepth;
+          inherit lib utils trace floxPathDepth;
           inherit spec pname perChannelPackages originalSet overlaidSet createMeta ownChannel;
           baseScope = baseScope';
           inherit createChannels;

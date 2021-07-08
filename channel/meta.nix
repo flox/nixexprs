@@ -1,4 +1,4 @@
-{ pkgs, lib, sourceOverrides, utils, callPackageWith, floxPathDepth }:
+{ pkgs, lib, sourceOverrides, utils, floxPathDepth }:
 let
   getChannelSource = pkgs.callPackage ./getSource.nix {
     inherit sourceOverrides;
@@ -21,10 +21,10 @@ importingChannel:
   inherit importingChannel ownChannel;
 
   withVerbosity = throw "meta.withVerbosity was removed, use `meta.trace <subsystem> <verbosity> <message> <value>` instead";
-  inherit trace scope channels;
+  inherit trace channels;
 
   mapDirectory = dir:
-    { call ? path: callPackageWith scope path { } }:
+    { call ? path: utils.callPackageWith scope path }:
     lib.mapAttrs (name: value: call value.path)
     (utils.dirToAttrs (trace.setContext "mapDirectory" (baseNameOf dir)) dir);
 
@@ -48,5 +48,5 @@ importingChannel:
       # scope which increases the depth by one more, though this
       # doesn't seem to be very beneficial in most cases
     } // lib.optionalAttrs (floxPathDepth >= 2)
-      (callPackageWith ownScope fullPathChecked { });
+      (utils.callPackageWith ownScope fullPathChecked);
 }

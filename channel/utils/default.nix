@@ -4,4 +4,5 @@
   nameFromGit = (import ./nameFromGit.nix { inherit lib; }).nameFromGit;
   traceWith = (import ./tracing.nix { inherit lib; }).traceWith;
   dirToAttrs = (import ./dirToAttrs.nix { inherit lib; }).dirToAttrs;
+  callPackageWith = (import ./callPackageWith.nix { inherit lib; }).callPackageWith;
 }

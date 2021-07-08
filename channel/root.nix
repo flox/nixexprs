@@ -303,15 +303,12 @@ let
     )
   ) packageChannels;
 
-  # FIXME: Custom callPackageWith that ensures default arguments aren't autopassed
-  callPackageWith = lib.callPackageWith;
-
   createMeta = originalPkgs.callPackage ./meta.nix {
     sourceOverrides =
       if secondArgs ? sourceOverrideJson
       then builtins.fromJSON secondArgs.sourceOverrideJson
       else {};
-    inherit utils callPackageWith floxPathDepth;
+    inherit utils floxPathDepth;
   };
 
   perImportingChannel = lib.mapAttrs (importingChannel: _:
