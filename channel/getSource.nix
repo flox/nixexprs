@@ -1,11 +1,11 @@
-{ sourceOverrides, lib, fetchgit, buildPackages }:
-channel:
+{ sourceOverrides, lib, trace, fetchgit, buildPackages }:
+channel: trace.withContext "channel" channel (trace:
 let
   channelSourceOverrides = sourceOverrides.${channel} or { };
   # Set the src and version variables based on project.
   # Recall that flox calls this expression with --argstr sourceOverrideJson '{ ... }',
   # so that needs to take precedence over all other sources of src.
-in project:
+in project: trace.withContext "project" project (trace:
 let
   # The source is provided with `--argstr sourceOverrideJson`
   channelOverrideComponents = let
@@ -115,11 +115,11 @@ let
     # Determine which components to use by prioritizing `--argstr sourceOverrideJson`
     # over override arguments over `<$channel-meta/srcs>`
     original = if channelSourceOverrides ? ${project} then
-      channelOverrideComponents
+      trace "getSource" 5 "Using overridden source" channelOverrideComponents
     else if overrides ? src then
-      argumentOverrideComponents
+      trace "getSource" 5 "Using src argument in package definition" argumentOverrideComponents
     else
-      metaComponents;
+      trace "getSource" 5 "Getting automatic source" metaComponents;
 
     # But let the user override all of them
     final = original // {
@@ -128,7 +128,7 @@ let
       versionSuffix = overrides.versionSuffix or original.versionSuffix;
       extraInfo = original.extraInfo // overrides.extraInfo or { };
     };
-  in final;
+  in trace "getSource" 5 final final;
 
   # The resulting attributes
   result = rec {
@@ -154,4 +154,4 @@ let
     )'';
   # No newline at the end, because we want builders to be able to pass additional redirections!
 
-in result // { inherit infoJson createInfoJson; }
+in result // { inherit infoJson createInfoJson; }))

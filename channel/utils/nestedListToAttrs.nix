@@ -1,6 +1,6 @@
 { lib ? import <nixpkgs/lib> }:
 let
-  nestedListToAttrs =
+  nestedListToAttrs = trace:
     let
       prettyPath = el: "\"" + lib.concatStringsSep "." el.path + "\"";
 
@@ -19,10 +19,13 @@ let
 
           nested = lib.mapAttrs (name: go (index + 1)) (lib.groupBy (el: lib.elemAt el.path index) lowered);
 
-        in
-        if split.wrong != [] then nested
-        else if lib.length split.right == 1 then (lib.head split.right).value
-        else throw "nestedListToAttrs: Conflict between multiple values for path ${prettyPath (lib.head split.right)}";
+          message = "Called with index ${toString index} and list paths ${trace.showValue (map (el: el.path) list)}";
+
+          result =
+            if split.wrong != [] then nested
+            else if lib.length split.right == 1 then (lib.head split.right).value
+            else throw "nestedListToAttrs: ${trace.contextPrefix}Conflict between multiple values for path ${prettyPath (lib.head split.right)}";
+        in trace "nestedListToAttrs" 9 message result;
     in list: if list == []
       then {}
       else go 0 list;
@@ -31,7 +34,7 @@ let
 in {
   inherit nestedListToAttrs;
 
-  test = nestedListToAttrs [
+  test = nestedListToAttrs null [
     { path = [ ]; value = { bar = 20; }; }
     { path = [ "arch" "foo" "florp" ]; value = 20; }
     { path = [ "arch" "foo" "florp" ]; value = 10; }

@@ -3,8 +3,7 @@
 let
 
   showValue = value:
-    if lib.isList value then lib.concatMapStringsSep " " showValue value
-    else if lib.strings.isCoercibleToString value then toString value
+    if lib.isString value then value
     else lib.generators.toPretty { multiline = false; } value;
 
   traceWith = { defaultVerbosity, subsystemVerbosities }:

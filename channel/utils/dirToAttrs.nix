@@ -46,7 +46,7 @@ let
       else
         trace "dirToAttrs" 5 "Not importing any attributes because the directory doesn't exist" { };
 
-    in trace "test" 5 "hello" result;
+    in result;
 in {
   inherit dirToAttrs;
 }

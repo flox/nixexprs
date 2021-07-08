@@ -14,11 +14,11 @@
 let
 
 
-  perPackageSet = lib.mapAttrs (setName: packages:
+  perPackageSet = lib.mapAttrs (setName: packages: trace.withContext "packageSet" setName (trace:
     let
       callScopeAttr = packageSets.${setName}.callScopeAttr;
     in
-    lib.mapAttrs (version: versionInfo:
+    lib.mapAttrs (version: versionInfo: trace.withContext "version" version (trace:
       let
         originalSet = lib.getAttrFromPath versionInfo.canonicalPath originalPkgs;
         overlaidSet = lib.getAttrFromPath versionInfo.canonicalPath overlaidPkgs;
@@ -60,21 +60,21 @@ let
         # mess with attribute names
         # TODO: Cover this with tests
         perChannelPackages = lib.mapAttrs (channel: value:
-          value.${setName}.${version}.perPackageSet
+          value.perPackageSet.${setName}.${version}
         ) dependencySet.channelPackages;
       in
-      lib.mapAttrs (pname: spec:
+      lib.mapAttrs (pname: spec: trace.withContext "package" pname (trace:
         import ./package.nix {
           inherit lib utils trace floxPathDepth;
           inherit spec pname perChannelPackages originalSet overlaidSet createMeta ownChannel;
           baseScope = baseScope';
           inherit createChannels;
         }
-      ) packages
-    ) packageSets.${setName}.versions
-  ) ownChannelSpecs;
+      )) packages
+    )) packageSets.${setName}.versions
+  )) ownChannelSpecs;
 
-  attributes = utils.nestedListToAttrs (lib.concatMap (setName:
+  attributes = utils.nestedListToAttrs trace (lib.concatMap (setName:
     lib.concatMap (version:
       let
         value = perPackageSet.${setName}.${version};

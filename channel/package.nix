@@ -58,6 +58,6 @@ let
     # package call influence the _floxPath with a _floxPathDepth
     # greater or equal to 1
   } // lib.optionalAttrs (floxPathDepth >= 1)
-    (utils.callPackageWith ownScope spec.exprPath);
+    (utils.callPackageWith trace ownScope spec.exprPath);
 
 in ownOutput

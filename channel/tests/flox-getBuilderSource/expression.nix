@@ -1,1 +1,1 @@
-(import <test> { }).testPackage.result
+(import <test> { debugVerbosity = 9; }).testPackage.result

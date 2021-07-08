@@ -308,56 +308,63 @@ let
       if secondArgs ? sourceOverrideJson
       then builtins.fromJSON secondArgs.sourceOverrideJson
       else {};
-    inherit utils floxPathDepth;
+    inherit utils trace floxPathDepth;
   };
 
-  perImportingChannel = lib.mapAttrs (importingChannel: _:
+  perImportingChannel = lib.mapAttrs (importingChannel: _: trace.withContext "importingChannel" importingChannel (trace:
     let
-      pathsToModify = type: lib.concatMap (setName:
-        lib.concatMap (version:
-          let
-            canonicalPath = packageSets.${setName}.versions.${version}.canonicalPath;
+      pathsToModify = type: trace.withContext "pathsToModifyType" type (trace:
+        lib.concatMap (setName: trace.withContext "packageSet" setName (trace:
+          lib.concatMap (version: trace.withContext "version" version (trace:
+            let
+              canonicalPath = packageSets.${setName}.versions.${version}.canonicalPath;
 
-            existingRoots = lib.filterAttrs (pname: spec:
-              spec.${type} != {}
-            ) packageRoots.${setName};
+              existingRoots = lib.filterAttrs (pname: spec:
+                spec.${type} != {}
+              ) packageRoots.${setName};
 
-            canonical = {
-              path = canonicalPath;
-              mod = super:
-                let
-                  overridingSet = lib.mapAttrs (pname: spec:
-                    if spec.${type}.channel == "nixpkgs" then super.${pname}
-                    else channelPackages.${spec.${type}.channel}.perPackageSet.${setName}.${version}.${pname}
-                  ) existingRoots;
-                in
-                if type == "deep"
-                then packageSets.${setName}.deepOverride super overridingSet
-                else super // overridingSet;
-            };
+              canonical = {
+                path = canonicalPath;
+                mod = super:
+                  let
+                    overridingSet = lib.mapAttrs (pname: spec:
+                      if spec.${type}.channel == "nixpkgs" then super.${pname}
+                      else channelPackages.${spec.${type}.channel}.perPackageSet.${setName}.${version}.${pname}
+                    ) existingRoots;
+                    message = "Injecting attributes into path ${trace.showValue canonicalPath}: ${trace.showValue (lib.attrNames overridingSet)}";
+                    overridingSet' = trace "pathsToModify" 2 message overridingSet;
+                    result =
+                      if overridingSet == {} then super
+                      else
+                        if type == "deep"
+                        then packageSets.${setName}.deepOverride super overridingSet
+                        else super // overridingSet;
+                  in result;
+              };
 
-            aliases = map (alias: {
-              path = alias;
-              mod = super: lib.getAttrFromPath canonicalPath (if type == "deep" then overlaidPkgs else finalPkgs);
-            }) packageSets.${setName}.versions.${version}.aliases;
+              aliases = map (alias: {
+                path = alias;
+                mod = super:
+                  trace "pathsToModify" 3 "Pointing alias ${trace.showValue alias} to ${trace.showValue canonicalPath}"
+                  (lib.getAttrFromPath canonicalPath (if type == "deep" then overlaidPkgs else finalPkgs));
+              }) packageSets.${setName}.versions.${version}.aliases;
 
-          in [ canonical ] ++ aliases
-        ) (lib.attrNames packageSets.${setName}.versions)
-      ) (lib.attrNames packageRoots);
+            in [ canonical ] ++ aliases
+          )) (lib.attrNames packageSets.${setName}.versions))
+        ) (lib.attrNames packageRoots));
 
-      # TODO: Make sure pathsToModify isn't evaluated multiple times
       overlaidPkgs = originalPkgs.extend (self: utils.modifyPaths (pathsToModify "deep"));
 
       finalPkgs = utils.modifyPaths (pathsToModify "shallow") overlaidPkgs;
 
-      channelPackages = lib.mapAttrs (ownChannel: ownChannelSpecs:
+      channelPackages = lib.mapAttrs (ownChannel: ownChannelSpecs: trace.withContext "channel" ownChannel (trace:
         import ./channel.nix {
           inherit lib utils trace packageSets originalPkgs floxPathDepth;
           inherit ownChannel ownChannelSpecs overlaidPkgs finalPkgs;
           dependencySet = perImportingChannel.${ownChannel}.forDependents;
           createMeta = createMeta importingChannel;
         }
-      ) channelPackageSpecs;
+      )) channelPackageSpecs;
     in {
       forDependents = {
         baseScope = finalPkgs // finalPkgs.xorg;
@@ -365,7 +372,7 @@ let
       };
       inherit overlaidPkgs finalPkgs;
     }
-  ) channelPackageSpecs;
+  )) channelPackageSpecs;
 
   rootImported = perImportingChannel.${rootChannelName};
 
