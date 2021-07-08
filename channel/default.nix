@@ -49,7 +49,7 @@ let
 
   ownResult = import ./own.nix {
     inherit firstArgs;
-    inherit (secondArgs._fromRoot) channelName lib utils trace packageSets packageChannels;
+    inherit (secondArgs._fromRoot) channelName lib utils trace packageSets;
   };
 
 in if _isRoot then rootResult else ownResult

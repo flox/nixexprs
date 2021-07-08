@@ -2,17 +2,18 @@
 , utils
 , packageSets
 , dependencySet
-, createMeta
 , originalPkgs
 , overlaidPkgs
 , finalPkgs
 , trace
 , floxPathDepth
+, importingChannel
 , ownChannel
-, ownChannelSpecs
+, ownChannelValues
+, packageChannels
+, getChannelSource
 }:
 let
-
 
   perPackageSet = lib.mapAttrs (setName: packages: trace.withContext "packageSet" setName (trace:
     let
@@ -20,59 +21,71 @@ let
     in
     lib.mapAttrs (version: versionInfo: trace.withContext "version" version (trace:
       let
-        originalSet = lib.getAttrFromPath versionInfo.canonicalPath originalPkgs;
-        overlaidSet = lib.getAttrFromPath versionInfo.canonicalPath overlaidPkgs;
         finalSet = lib.getAttrFromPath versionInfo.canonicalPath finalPkgs;
-
         baseScope' = dependencySet.baseScope // lib.optionalAttrs (callScopeAttr != null) (finalSet // {
           ${callScopeAttr} = finalSet;
         });
-
-        createChannels = file:
-          let
-            channelAttrsCased = lib.mapAttrs (channel: value:
-              value.attributes // lib.optionalAttrs (callScopeAttr != null) {
-                ${callScopeAttr} = lib.getAttrFromPath versionInfo.canonicalPath value.attributes;
-              }
-            ) dependencySet.channelPackages;
-
-            channelAttrs = channelAttrsCased // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) channelAttrsCased;
-
-            withWarningPrefix = prefix: lib.mapAttrs (attr:
-              lib.warn (
-                "In ${file}, `${lib.concatStringsSep "." prefix}.${attr}` is "
-                + "accessed, which is discouraged because it circumvents "
-                + "potential package conflicts between channels. Please use "
-                + "`${attr}` directly by adding it to the argument list at "
-                + "the top of the file if it doesn't exist already, and "
-                + "remove the `${lib.head prefix}` argument. The `${attr}` "
-                + "argument contains the definitions from all channels and "
-                + "gives a conflict warning if multiple channels define the "
-                + "same package.")
-            );
-          in {
-            channels = lib.mapAttrs (name: withWarningPrefix [ "channels" name ]) channelAttrs;
-            flox = withWarningPrefix [ "flox" ] channelAttrs.flox;
-          };
-
-        # Basically the same as accessing individual channels from
-        # createChannels, except that this is safe, and we don't need to
-        # mess with attribute names
-        # TODO: Cover this with tests
-        perChannelPackages = lib.mapAttrs (channel: value:
-          value.perPackageSet.${setName}.${version}
-        ) dependencySet.channelPackages;
       in
       lib.mapAttrs (pname: spec: trace.withContext "package" pname (trace:
-        import ./package.nix {
-          inherit lib utils trace floxPathDepth;
-          inherit spec pname perChannelPackages originalSet overlaidSet createMeta ownChannel;
+        let
+          floxFile = toString (
+            if builtins.pathExists (spec.path + "/default.nix")
+            then spec.path + "/default.nix"
+            else spec.path);
+
+          superChannel = import ./resolve.nix {
+            inherit lib;
+            trace = trace.setContext "resolution" "super";
+            resolution = ownChannelValues.conflictResolution.${setName}.${pname} or null;
+            validChannels = builtins.intersectAttrs ownChannelValues.dependencies packageChannels.${setName}.${pname};
+            allChannels = dependencySet.channelPackages;
+            rootFile = ownChannelValues.rootFile;
+            inherit setName pname;
+            resolutionNeededReason =
+              "In the definition of the ${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} "
+              + "package in ${floxFile}, the argument ${pname} itself is being used, "
+              + "which points to the unoverridden version of the same package";
+          };
+
+          nixpkgsSet = lib.getAttrFromPath versionInfo.canonicalPath
+            (if spec.deep then originalPkgs else overlaidPkgs);
+
+          superPackage =
+            if superChannel == "nixpkgs" then nixpkgsSet.${pname}
+            else dependencySet.channelPackages.${superChannel}.perPackageSet.${setName}.${version}.${pname};
+
+          channelAttrsCased = lib.mapAttrs (channel: value:
+            value.attributes // lib.optionalAttrs (callScopeAttr != null) {
+              ${callScopeAttr} = lib.getAttrFromPath versionInfo.canonicalPath value.attributes;
+            }
+          ) dependencySet.channelPackages;
+
+          channelAttrs = channelAttrsCased // lib.mapAttrs' (name: lib.nameValuePair (lib.toLower name)) channelAttrsCased;
+
+          withWarningPrefix = prefix: lib.mapAttrs (attr:
+            lib.warn (
+              "In ${floxFile}, `${lib.concatStringsSep "." prefix}.${attr}` is "
+              + "accessed, which is discouraged because it circumvents "
+              + "potential package conflicts between channels. Please use "
+              + "`${attr}` directly by adding it to the argument list at "
+              + "the top of the file if it doesn't exist already, and "
+              + "remove the `${lib.head prefix}` argument. The `${attr}` "
+              + "argument contains the definitions from all channels and "
+              + "gives a conflict warning if multiple channels define the "
+              + "same package.")
+          );
+
+        in import ./package.nix {
+          inherit lib utils trace floxPathDepth importingChannel ownChannel getChannelSource floxFile;
+          channels = lib.mapAttrs (name: withWarningPrefix [ "channels" name ]) channelAttrs;
+          flox = withWarningPrefix [ "flox" ] channelAttrs.flox;
+          floxPath = spec.path;
           baseScope = baseScope';
-          inherit createChannels;
+          superScope.${pname} = superPackage;
         }
       )) packages
     )) packageSets.${setName}.versions
-  )) ownChannelSpecs;
+  )) ownChannelValues.packageSpecs;
 
   attributes = utils.nestedListToAttrs trace (lib.concatMap (setName:
     lib.concatMap (version:

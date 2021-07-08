@@ -8,13 +8,13 @@ let
   # We allow passing through of nixpkgs arguments, but we don't want all the
   # flox-specific arguments to be passed
   nixpkgsArgs = removeAttrs secondArgs [
+    "_isRoot"
+    "_fromRoot"
     "name"
     "debugVerbosity"
     "subsystemVerbosities"
     "sourceOverrideJson"
-    "_isRoot"
-    "_fromRoot"
-    "_isFloxChannel"
+    "_floxPathDepth"
   ];
 
   originalPkgs = import <nixpkgs> nixpkgsArgs;
@@ -28,6 +28,14 @@ let
     subsystemVerbosities = secondArgs.subsystemVerbosities or {};
   };
 
+  getChannelSource = originalPkgs.callPackage ./getSource.nix {
+    inherit trace;
+    sourceOverrides =
+      if secondArgs ? sourceOverrideJson
+      then builtins.fromJSON secondArgs.sourceOverrideJson
+      else {};
+  };
+
   packageSets =
     let
       pregenPath = toString (<nixpkgs-pregen> + "/package-sets.json");
@@ -36,7 +44,7 @@ let
         (lib.importJSON pregenPath)
       else
         lib.warn
-        "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slow"
+        "Path ${pregenPath} doesn't exist, won't be able to use precomputed result, evaluation will be slower"
         (import ./package-sets.nix {
           inherit lib;
           pregenerate = true;
@@ -55,15 +63,14 @@ let
 
   # This is the result if we're not the root channel
   ownResult = import ./own.nix {
-    inherit firstArgs lib utils trace packageSets packageChannels;
+    inherit firstArgs lib utils trace packageSets;
     channelName = rootChannelName;
   };
 
   channelClosure =
     let
-      sanitizeResult = name: result: {
-        dependencies = lib.unique (lib.subtractLists [ "nixpkgs" name ] (result.dependencies ++ [ "flox" ]));
-        packageSpecs = result.packageSpecs;
+      sanitizeResult = name: result: result // {
+        dependencies = removeAttrs (result.dependencies // { flox = null; }) [ name ];
       };
 
       root = {
@@ -78,7 +85,7 @@ let
             _isRoot = false;
             _fromRoot = {
               channelName = name;
-              inherit lib utils trace packageSets packageChannels;
+              inherit lib utils trace packageSets;
             };
           };
         in
@@ -90,7 +97,7 @@ let
           key = name;
           value = getChannel entry.key name;
         }
-      ) entry.value.dependencies;
+      ) (lib.attrNames (removeAttrs entry.value.dependencies [ "nixpkgs" ]));
 
       result = builtins.genericClosure {
         startSet = [ root ];
@@ -105,7 +112,7 @@ let
       ${lib.concatMapStrings (entry:
         lib.concatMapStrings (dep:
           "  \"${entry.key}\" -> \"${dep}\";\n"
-        ) entry.value.dependencies
+        ) (lib.attrNames entry.value.dependencies)
       ) channelClosure}}
     '';
     passAsFile = [ "graph" ];
@@ -125,7 +132,7 @@ let
   /*
   ## Package specifications
 
-  A package specification is a structure containing all the necessary
+  A package specification is a structure containing most of the necessary
   information of a package for it to be usable by a dependent channel.
 
   It contains these fields
@@ -135,37 +142,35 @@ let
     # causes it to be injected into nixpkgs via an overlay
     deep = <bool>;
 
-    # Which channel (or nixpkgs), if any, this package is extended from. When the
-    # same package attribute is used in the expression as an argument, this
-    # is the channel it refers to
-    extends = null | "nixpkgs" | <channel>;
-
     # The path to the package expression
-    exprPath = <path>;
+    path = <path>;
   }
   */
 
 
   /*
-  Gives a package specification for each package in each channel.
+  Gives the values as returned by each channels own.nix calls
 
   {
-    <channel>.<packageSet>.<pname> = <package specification>;
+    <channel> = {
+      dependencies = [ ... ];
+      packageSpecs.<packageSet>.<pname> = <package specification>;
+      conflictResolution = { ... };
+      rootFile = "...";
+    };
   }
   */
-  channelPackageSpecs = lib.listToAttrs (map (entry: {
+  channelValues = lib.listToAttrs (map (entry: {
     name = entry.key;
-    value = entry.value.packageSpecs;
+    value = entry.value;
   }) channelClosure);
 
   /*
   Lists all channels (including nixpkgs) that contain a given package
 
-  This value is passed to all ownPackageSpecs functions in all channels for them to be
-  able to efficiently decide the `extends` of all the channels packages.
-
-  This is later also going to be used by the root channel to decide where to
-  get packages from.
+  This value is used to construct the called versions of all packages later
+  down below. It is also used for the conflict resolution to quickly know which
+  channels provide a package and which don't.
 
   {
     <packageSet>.<pname> = {
@@ -183,8 +188,8 @@ let
           inherit pname;
           name = channel;
           value = null;
-        }) channelPackageSpecs.${channel}.${setName}
-      ) (lib.attrNames channelPackageSpecs);
+        }) channelValues.${channel}.packageSpecs.${setName}
+      ) (lib.attrNames channelValues);
 
       result = lib.mapAttrs (name: values:
         lib.listToAttrs values
@@ -209,46 +214,37 @@ let
     };
   }
   */
-  packageRoots = lib.mapAttrs (setName:
-    lib.mapAttrs (pname: channels:
+  packageRoots = lib.mapAttrs (setName: trace.withContext "packageSet" setName (trace:
+    lib.mapAttrs (pname: channels: trace.withContext "package" pname (trace:
       let
+        # We're going to split the channels into ones that provide the deep
+        # and non-deep version of the package. We need to split off nixpkgs
+        # first though, since that's not a proper channel
         existsInNixpkgs = channels ? nixpkgs;
 
-        # All the channels that define this package
+        # All channels providing this package as a list, and without nixpkgs
         channelList = lib.attrNames (removeAttrs channels [ "nixpkgs" ]);
 
         # Split the channels into deep (.right) and non-deep (.wrong)
-        split = lib.partition (channel: channelPackageSpecs.${channel}.${setName}.${pname}.deep) channelList;
+        split = lib.partition (channel:
+          channelValues.${channel}.packageSpecs.${setName}.${pname}.deep
+        ) channelList;
 
-        root = deep: entries:
+        root = deep: entries: trace.withContext "resolution" "root-${if deep then "deep" else "shallow"}" (trace:
+          # Early exit in case there's no channel (needed to keep it lazy and fast)
           if entries == [] then {}
           else {
             channel =
-              let
-                options =
-                  lib.optionalString existsInNixpkgs ''
-                    conflictResolution.${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} = "nixpkgs";
-                  ''
-                  + lib.concatMapStrings (entry: ''
-                    conflictResolution.${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} = "${entry}";
-                  '') entries;
-
-                resolution = firstArgs.conflictResolution.${setName}.${pname};
-                invalidResolution = reason: throw
-                  ("The conflict resolution for package \"${setName}.${pname}\" "
-                  + "is set to \"${resolution}\", which is not a valid option "
-                  + "because ${reason}. Change the conflict resolution for this "
-                  + "package in ${toString firstArgs.topdir}/default.nix to be "
-                  + "one of the following lines instead:\n${options}");
-              in
               # We don't allow deep overrides for packages that don't exist in
               # nixpkgs already, because doing so would allow channels we
               # depend on to change nixpkgs behavior without the user having
               # to confirm it. This works by means of detecting _whether_
-              # package attributes are there or not, without evaluating them,
-              # which could allow a vulnerability in which upstream nixpkgs is
+              # package attributes are there or not, without evaluating them.
+              # This could allow a vulnerability in where upstream nixpkgs is
               # injected with some code that only triggers when a certain
-              # attribute is there
+              # attribute is there. But even without adversaries, we shouldn't
+              # allow changing nixpkgs behavior without a confirmation from
+              # the root channel
               if deep && ! existsInNixpkgs then throw
                 ("The package \"${setName}.${pname}\" in channel "
                 + "\"${lib.head entries}\" is specified as `deep-override`-ing, "
@@ -257,59 +253,30 @@ let
 
               # If the root channel specifies this package, that takes precedence
               # This allows the root channel to override any attribute of any
-              # other channel, without the user having to confirm this
+              # other channel, without the user having to confirm it
               else if lib.elem rootChannelName entries then
-                rootChannelName
+                trace "resolution" 2 "Defined in root channel, using that" rootChannelName
 
-              # If a conflict resolution has been provided for this package,
-              # use it, after ensuring it's a valid option
-              else if firstArgs ? conflictResolution.${setName}.${pname} then
-                if resolution == "nixpkgs" then
-                  if existsInNixpkgs then resolution
-                  else invalidResolution "nixpkgs doesn't have this package"
-                else if ! channelPackageSpecs ? ${resolution} then
-                  invalidResolution "the channel \"${resolution}\" doesn't exist"
-                else if lib.elem resolution entries then resolution
-                else
-                  invalidResolution "the channel \"${resolution}\" doesn't have this package"
-
-              # If no conflict resolution has provided, but we only have a
-              # single entry anyways, we can use that. However, if the
-              # attribute also exists in nixpkgs, we essentially have two
-              # entries then. We only allow this if the _flox_ channel is the
-              # one channel, since we trust ourselves to override nixpkgs
-              # attributes correctly
-              else if lib.length entries == 1
-                && (existsInNixpkgs -> lib.head entries == "flox") then
-                lib.head entries
-
-              # Otherwise we throw an error that the conflict needs to be
-              # resolved manually
-              else throw
-                ("The package \"${setName}.${pname}\" is declared multiple "
-                + "times ${lib.optionalString deep "as `deep-override`-ing "}"
-                + "in channels ${lib.concatMapStringsSep ", "
-                  lib.strings.escapeNixIdentifier entries}"
-                + "${lib.optionalString existsInNixpkgs " and nixpkgs itself"}. "
-                + "This conflict needs to be resolved by adding one of the "
-                + "following lines to the passed attribute set in "
-                + "${toString firstArgs.topdir}/default.nix:\n${options}");
-          };
+              else import ./resolve.nix {
+                inherit lib trace;
+                resolution = firstArgs.conflictResolution.${setName}.${pname} or null;
+                # TODO: Introduce a lib.partition that works on attribute sets
+                validChannels = lib.genAttrs (entries ++ lib.optional existsInNixpkgs "nixpkgs") (x: null);
+                allChannels = channelValues;
+                rootFile = channelValues.${rootChannelName}.rootFile;
+                inherit setName pname;
+                resolutionNeededReason =
+                  "The ${lib.optionalString deep "`deep-override` "}package "
+                  + "${lib.strings.escapeNixIdentifier setName}.${lib.strings.escapeNixIdentifier pname} is being used";
+              };
+          });
 
       in {
         deep = root true split.right;
         shallow = root false split.wrong;
       }
-    )
-  ) packageChannels;
-
-  createMeta = originalPkgs.callPackage ./meta.nix {
-    sourceOverrides =
-      if secondArgs ? sourceOverrideJson
-      then builtins.fromJSON secondArgs.sourceOverrideJson
-      else {};
-    inherit utils trace floxPathDepth;
-  };
+    ))
+  )) packageChannels;
 
   perImportingChannel = lib.mapAttrs (importingChannel: _: trace.withContext "importingChannel" importingChannel (trace:
     let
@@ -327,25 +294,32 @@ let
                 path = canonicalPath;
                 mod = super:
                   let
+
                     overridingSet = lib.mapAttrs (pname: spec:
                       if spec.${type}.channel == "nixpkgs" then super.${pname}
                       else channelPackages.${spec.${type}.channel}.perPackageSet.${setName}.${version}.${pname}
                     ) existingRoots;
-                    message = "Injecting attributes into path ${trace.showValue canonicalPath}: ${trace.showValue (lib.attrNames overridingSet)}";
-                    overridingSet' = trace "pathsToModify" 2 message overridingSet;
+
+                    tracingOverridingSet =
+                      trace "pathsToModify" 2
+                      "Injecting attributes into path ${trace.showValue canonicalPath}: ${trace.showValue (lib.attrNames overridingSet)}"
+                      overridingSet;
+
                     result =
                       if overridingSet == {} then super
                       else
                         if type == "deep"
-                        then packageSets.${setName}.deepOverride super overridingSet
-                        else super // overridingSet;
+                        then packageSets.${setName}.deepOverride super tracingOverridingSet
+                        else super // tracingOverridingSet;
+
                   in result;
               };
 
               aliases = map (alias: {
                 path = alias;
                 mod = super:
-                  trace "pathsToModify" 3 "Pointing alias ${trace.showValue alias} to ${trace.showValue canonicalPath}"
+                  trace "pathsToModify" 3
+                  "Pointing alias ${trace.showValue alias} to ${trace.showValue canonicalPath}"
                   (lib.getAttrFromPath canonicalPath (if type == "deep" then overlaidPkgs else finalPkgs));
               }) packageSets.${setName}.versions.${version}.aliases;
 
@@ -353,30 +327,42 @@ let
           )) (lib.attrNames packageSets.${setName}.versions))
         ) (lib.attrNames packageRoots));
 
+      # Extend nixpkgs with an overlay that adds our deeply overridden packages
       overlaidPkgs = originalPkgs.extend (self: utils.modifyPaths (pathsToModify "deep"));
 
+      # For shallow packages, just modify the attributes directly
       finalPkgs = utils.modifyPaths (pathsToModify "shallow") overlaidPkgs;
 
-      channelPackages = lib.mapAttrs (ownChannel: ownChannelSpecs: trace.withContext "channel" ownChannel (trace:
+      /*
+      Of the form
+      {
+        # Contains the called package for that channel, package set and version
+        <channel>.perPackageSet.<packageSet>.<version>.<pname> = <derivation>;
+
+        # The same as above, but turned into a nixpkgs-like attribute set
+        <channel>.attributes = <derivations>;
+      }
+      */
+      channelPackages = lib.mapAttrs (ownChannel: ownChannelValues: trace.withContext "channel" ownChannel (trace:
         import ./channel.nix {
           inherit lib utils trace packageSets originalPkgs floxPathDepth;
-          inherit ownChannel ownChannelSpecs overlaidPkgs finalPkgs;
-          dependencySet = perImportingChannel.${ownChannel}.forDependents;
-          createMeta = createMeta importingChannel;
+          inherit importingChannel ownChannel ownChannelValues overlaidPkgs finalPkgs packageChannels getChannelSource;
+          dependencySet = perImportingChannel.${ownChannel}.dependencySet;
         }
-      )) channelPackageSpecs;
+      )) channelValues;
     in {
-      forDependents = {
+      dependencySet = {
         baseScope = finalPkgs // finalPkgs.xorg;
         inherit channelPackages;
       };
       inherit overlaidPkgs finalPkgs;
     }
-  )) channelPackageSpecs;
+    )) channelValues;
+
 
   rootImported = perImportingChannel.${rootChannelName};
 
-  result = rootImported.forDependents.channelPackages.${rootChannelName}.attributes // {
+  result = rootImported.dependencySet.channelPackages.${rootChannelName}.attributes // {
     channelInfo = {
       # The original nixpkgs package set
       inherit originalPkgs;
@@ -385,15 +371,17 @@ let
       # And nixpkgs with the floxpkgs layer applied
       inherit (rootImported) finalPkgs;
       # The packages for each channel
-      perChannelAttributes = lib.mapAttrs (channel: value: value.attributes) rootImported.forDependents.channelPackages;
+      perChannelAttributes = lib.mapAttrs (channel: value: value.attributes) rootImported.dependencySet.channelPackages;
       # Where packages come from
       inherit packageRoots;
       # The package specifications as declared by each channel
-      inherit channelPackageSpecs;
+      inherit channelValues;
       # A nice visualization of how channels depend on each other
       inherit dependencyGraph;
       # The package set information
       inherit packageSets;
+      # Which channels define a package
+      inherit packageChannels;
     };
   };
 

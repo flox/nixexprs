@@ -1,48 +1,67 @@
 { lib
-, spec
-, pname
 , utils
-, perChannelPackages
-, createMeta
+, floxPath
+, floxFile
+, importingChannel
 , ownChannel
 , trace
 , floxPathDepth
-, originalSet
-, overlaidSet
 , baseScope
-, createChannels
+, channels
+, flox
+, superScope
+, getChannelSource
 }:
 let
 
-  file =
-    if builtins.pathExists (spec.exprPath + "/default.nix")
-    then spec.exprPath + "/default.nix"
-    else spec.exprPath;
+  meta = {
+    inherit getChannelSource;
+    getSource = getChannelSource ownChannel;
+    getBuilderSource = lib.warn
+      ("meta.getBuilderSource as used in ${floxFile} is deprecated,"
+        + " use `meta.getChannelSource meta.importingChannel` instead")
+      (getChannelSource importingChannel);
+    inherit importingChannel ownChannel;
 
-  superPackage =
-    if spec.extends == null then
-      throw "${pname} is accessed in ${file}, but is not defined because nixpkgs has no ${pname} attribute"
-    else if spec.extends == "nixpkgs" then
-      if spec.deep then originalSet.${pname} else overlaidSet.${pname}
-    else if ! perChannelPackages ? ${spec.extends} then
-      throw "extends channel ${spec.extends} doesn't exist"
-    else if ! perChannelPackages.${spec.extends} ? ${pname} then
-      throw "extends package ${pname} doesn't exist in channel ${spec.extends}"
-    else perChannelPackages.${spec.extends}.${pname};
+    withVerbosity = throw "meta.withVerbosity as used in ${floxFile} was removed, use `meta.trace <subsystem> <verbosity> <message> <value>` instead";
+    inherit trace channels;
 
-  inherit (createChannels file) channels flox;
+    mapDirectory = dir: trace.withContext "mapDirectory" (baseNameOf dir) (trace:
+      { call ? path: utils.callPackageWith trace scope path }:
+      lib.mapAttrs (name: value: call value.path)
+      (utils.dirToAttrs trace dir) // {
+        recurseForDerivations = true;
+      });
+
+    importNix =
+      { channel ? importingChannel, project, path, ... }@args: trace.withContext "importNix" "" (trace:
+      let
+        source = getChannelSource channel project args;
+        fullPath = source.src + "/${path}";
+        fullPathChecked = if builtins.pathExists fullPath then
+          fullPath
+        else
+          throw
+          "`meta.importNix` in ${floxFile}: File ${path} doesn't exist in source for project ${project} in channel ${importingChannel}";
+      in {
+        # flox edit should edit the path specified here
+        _floxPath = fullPath;
+        # If we're evaluating for a _floxPath, only let the result of an
+        # importNix call influence the _floxPath with a _floxPathDepth
+        # greater or equal to 2
+        # Note that technically we could pass a nested importNix into the
+        # scope which increases the depth by one more, though this
+        # doesn't seem to be very beneficial in most cases
+      } // lib.optionalAttrs (floxPathDepth >= 2)
+        (utils.callPackageWith trace ownScope fullPathChecked));
+  };
 
   # TODO: Probably more efficient to directly inspect function arguments and fill these entries out.
   # A callPackage abstraction that allows specifying multiple attribute sets might be nice
   createScope = isOwn:
-    baseScope // lib.optionalAttrs isOwn {
-      ${pname} = superPackage;
-    } // {
+    baseScope // lib.optionalAttrs isOwn superScope // {
       # These attributes are reserved
-      inherit channels flox;
-      meta = createMeta {
-        inherit file trace ownChannel channels scope ownScope;
-      };
+      inherit channels flox meta;
       callPackage = lib.callPackageWith scope;
     };
 
@@ -53,11 +72,11 @@ let
     # Allows getting back to the file that was used with e.g. `nix-instantiate --eval -A foo._floxPath`
     # Note that we let the callPackage result override this because builders
     # like flox.importNix are able to provide a more accurate file location
-    _floxPath = spec.exprPath;
+    _floxPath = floxPath;
     # If we're evaluating for a _floxPath, only let the result of an
     # package call influence the _floxPath with a _floxPathDepth
     # greater or equal to 1
   } // lib.optionalAttrs (floxPathDepth >= 1)
-    (utils.callPackageWith trace ownScope spec.exprPath);
+    (utils.callPackageWith trace ownScope floxFile);
 
 in ownOutput
