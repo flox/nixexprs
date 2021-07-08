@@ -78,15 +78,28 @@ let
     lib.concatMap (version:
       let
         value = perPackageSet.${setName}.${version};
-
         versionInfo = packageSets.${setName}.versions.${version};
-        paths = [ versionInfo.canonicalPath ] ++ versionInfo.aliases;
 
-        result = map (path: {
+        canonical = {
+          path = versionInfo.canonicalPath;
+          inherit value;
+        };
+
+        hydraRecurse = lib.imap1 (prefixLength: _: {
+          path = lib.take prefixLength versionInfo.canonicalPath ++ [ "recurseForDerivations" ];
+          value = true;
+        }) versionInfo.canonicalPath;
+
+        aliases = map (path: {
           inherit path value;
-        }) paths;
+        }) versionInfo.aliases;
 
-      in lib.optionals (value != {}) result
+        all = [ canonical ]
+          # Only let hydra recurse if the package set is recursed into by nixpkgs too
+          ++ lib.optionals versionInfo.recurse hydraRecurse
+          ++ aliases;
+
+      in lib.optionals (value != {}) all
     ) (lib.attrNames packageSets.${setName}.versions)
   ) (lib.attrNames packageSets));
 

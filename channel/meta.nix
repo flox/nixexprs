@@ -26,7 +26,9 @@ importingChannel:
   mapDirectory = dir: trace.withContext "mapDirectory" (baseNameOf dir) (trace:
     { call ? path: utils.callPackageWith trace scope path }:
     lib.mapAttrs (name: value: call value.path)
-    (utils.dirToAttrs trace dir));
+    (utils.dirToAttrs trace dir) // {
+      recurseForDerivations = true;
+    });
 
   importNix =
     { channel ? importingChannel, project, path, ... }@args: trace.withContext "importNix" "" (trace:
