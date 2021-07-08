@@ -1,0 +1,1 @@
+error: In the definition of the pkgs.testPackage package in .*/test/pkgs/testPackage.nix, the argument testPackage itself is being used, which points to the unoverridden version of the same package. However, none of the channels provide this package.

@@ -1,0 +1,1 @@
+error: The package "pkgs.testPackage" in channel "test" is specified as `deep-override`-ing, but this package doesn't exist in nixpkgs. Only packages that exist in nixpkgs can be deeply overridden.
