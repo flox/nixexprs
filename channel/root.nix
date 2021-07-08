@@ -397,5 +397,6 @@ let
     };
   };
 
-  # Evaluate name early so that name inference warnings get displayed at the start, and not just once we depend on another channel
-in result
+  resultWithWarning = if firstArgs ? extraOverlays then lib.warn "The `extraOverlays` argument defined in ${toString firstArgs.topdir}/default.nix is deprecated and has no effect anymore, it can be removed" result else result;
+
+in resultWithWarning
