@@ -1,0 +1,3 @@
+error: The package pkgs.buildGoModule is being used. However there are multiple channels which provide that package. No conflict resolution is currently provided. Valid options are \[ "flox", "other" \]. Set the conflict resolution for this package in .*/test/default.nix by copying one of the following lines to it:
+conflictResolution.pkgs.buildGoModule = "flox";
+conflictResolution.pkgs.buildGoModule = "other";

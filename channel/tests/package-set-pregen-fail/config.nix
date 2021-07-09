@@ -1,4 +1,4 @@
-{ nixpkgs, repo }: {
+{ nixpkgs, repo, nixpkgs-pregen }: {
   type = "eval";
   exitCode = 0;
   nixPath = [

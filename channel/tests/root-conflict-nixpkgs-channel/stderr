@@ -1,0 +1,3 @@
+error: The package pkgs.ncurses is being used. However there are multiple channels which provide that package. No conflict resolution is currently provided. Valid options are \[ "foo", "nixpkgs" \]. Set the conflict resolution for this package in .*/test/default.nix by copying one of the following lines to it:
+conflictResolution.pkgs.ncurses = "foo";
+conflictResolution.pkgs.ncurses = "nixpkgs";

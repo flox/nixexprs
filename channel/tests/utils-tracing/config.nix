@@ -1,4 +1,4 @@
-{ nixpkgs, repo }: {
+{ nixpkgs, repo, nixpkgs-pregen }: {
   type = "eval-strict";
   exitCode = 0;
   nixPath = [
@@ -9,6 +9,10 @@
     {
       prefix = "flox";
       path = repo;
+    }
+    {
+      prefix = "nixpkgs-pregen";
+      path = nixpkgs-pregen;
     }
   ];
 }

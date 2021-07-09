@@ -1,0 +1,3 @@
+error: In the definition of the pkgs.testPackage package in .*/test/pkgs/testPackage.nix, the argument testPackage itself is being used, which points to the unoverridden version of the same package. However there are multiple channels which provide that package. No conflict resolution is currently provided. Valid options are \[ "bar", "foo" \]. Set the conflict resolution for this package in .*/test/default.nix by copying one of the following lines to it:
+conflictResolution.pkgs.testPackage = "bar";
+conflictResolution.pkgs.testPackage = "foo";

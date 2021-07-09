@@ -1,4 +1,4 @@
-{ pkgs, nixpkgs, repo }:
+{ pkgs, nixpkgs, repo, nixpkgs-pregen }:
 let
   channel = pkgs.runCommandNoCC "test-channel" {
     nativeBuildInputs = [ pkgs.gitMinimal ];
@@ -24,6 +24,10 @@ in {
     {
       prefix = "flox";
       path = repo;
+    }
+    {
+      prefix = "nixpkgs-pregen";
+      path = nixpkgs-pregen;
     }
   ];
 }

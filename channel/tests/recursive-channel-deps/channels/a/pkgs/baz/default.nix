@@ -1,1 +1,1 @@
-{ channels }: { result = channels.b.bar.result; }
+{ channels }: { result = channels.b.mybar.result; }

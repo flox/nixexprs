@@ -1,0 +1,3 @@
+error: In the definition of the pkgs.hello package in .*/test/pkgs/hello.nix, the argument hello itself is being used, which points to the unoverridden version of the same package. However there are multiple channels which provide that package. No conflict resolution is currently provided. Valid options are \[ "florp", "nixpkgs" \]. Set the conflict resolution for this package in .*/test/default.nix by copying one of the following lines to it:
+conflictResolution.pkgs.hello = "florp";
+conflictResolution.pkgs.hello = "nixpkgs";

@@ -1,4 +1,4 @@
-{ nixpkgs, repo }: {
+{ nixpkgs, repo, nixpkgs-pregen }: {
   type = "eval-strict";
   exitCode = 0;
   nixPath = [
@@ -13,6 +13,10 @@
     {
       prefix = "";
       path = ./channels;
+    }
+    {
+      prefix = "nixpkgs-pregen";
+      path = nixpkgs-pregen;
     }
   ];
 }

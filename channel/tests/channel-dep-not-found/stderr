@@ -1,0 +1,1 @@
+error: Channel "florp" as declared as a dependency in channel "test" can't found in NIX_PATH
