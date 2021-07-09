@@ -73,123 +73,143 @@ let
     in if pregenerate then {
       inherit versions;
     } else {
-      inherit (pregenResult.${setName}) versions;
+      inherit (pregenResult.packageSets.${setName}) versions;
       inherit callScopeAttr deepOverride;
     };
 
-in lib.mapAttrs packageSet {
+  packageSets = lib.mapAttrs packageSet {
 
-  /* Each entry here needs these attributes:
-     - versionForPackageSet :: PackageSet -> Version
-       Returns the version for a package set, or null if no version could be determined
-     - attrPathForVersion :: Version -> [String]
-       Returns a nixpkgs attribute path at which the given version should be found
-     - packageSetAttrPaths :: Attrs -> [[String]]
-       Given a nixpkgs set, return all attribute paths that refer to a package set
-     - callScopeAttr :: String
-       The standard attribute that callPackage passes the package files as an argument for finding the package set
-     - deepOverride :: PackageSet -> PackageSet
-       Takes two package sets and deeply overrides the former to use all dependencies from the latter
-       See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#package-sets for why this is needed
-  */
+    /* Each entry here needs these attributes:
+       - versionForPackageSet :: PackageSet -> Version
+         Returns the version for a package set, or null if no version could be determined
+       - attrPathForVersion :: Version -> [String]
+         Returns a nixpkgs attribute path at which the given version should be found
+       - packageSetAttrPaths :: Attrs -> [[String]]
+         Given a nixpkgs set, return all attribute paths that refer to a package set
+       - callScopeAttr :: String
+         The standard attribute that callPackage passes the package files as an argument for finding the package set
+       - deepOverride :: PackageSet -> PackageSet
+         Takes two package sets and deeply overrides the former to use all dependencies from the latter
+         See https://github.com/flox/floxpkgs/blob/staging/docs/expl/deep-overrides.md#package-sets for why this is needed
+    */
 
-  haskell = {
+    pkgs = {
 
-    versionForPackageSet = set: set.ghc.version or null;
+      versionForPackageSet = set: "none";
 
-    attrPathForVersion = version:
-      let
-        parts = lib.versions.splitVersion version;
-        attribute =
-          "ghc${lib.elemAt parts 0}${lib.elemAt parts 1}${lib.elemAt parts 2}";
-      in [ "haskell" "packages" attribute ];
+      attrPathForVersion = version: [ ];
 
-    packageSetAttrPaths = let
-      matches = name: builtins.match "ghc[0-9]*" name != null;
-      names = lib.filter matches (lib.attrNames (pkgs.haskell.packages or { }));
-      canonicalPaths = map (name: [ "haskell" "packages" name ]) names;
-      aliases = [ [ "haskellPackages" ] ];
-    in aliases ++ canonicalPaths;
+      packageSetAttrPaths = [ [ ] ];
 
-    callScopeAttr = "haskellPackages";
+      callScopeAttr = null;
 
-    deepOverride = set: overrides:
-      set.override (old: {
-        overrides =
-          lib.composeExtensions old.overrides (self: super: overrides);
-      });
+      deepOverride = set: overrides: set // overrides;
+    };
 
+    haskellPackages = {
+
+      versionForPackageSet = set: set.ghc.version or null;
+
+      attrPathForVersion = version:
+        let
+          parts = lib.versions.splitVersion version;
+          attribute = "ghc${lib.elemAt parts 0}${lib.elemAt parts 1}${
+              lib.elemAt parts 2
+            }";
+        in [ "haskell" "packages" attribute ];
+
+      packageSetAttrPaths = let
+        matches = name: builtins.match "ghc[0-9]*" name != null;
+        names =
+          lib.filter matches (lib.attrNames (pkgs.haskell.packages or { }));
+        canonicalPaths = map (name: [ "haskell" "packages" name ]) names;
+        aliases = [ [ "haskellPackages" ] ];
+      in aliases ++ canonicalPaths;
+
+      callScopeAttr = "haskellPackages";
+
+      deepOverride = set: overrides:
+        set.override (old: {
+          overrides =
+            lib.composeExtensions old.overrides (self: super: overrides);
+        });
+
+    };
+
+    beamPackages = {
+
+      versionForPackageSet = set: set.erlang.version or null;
+
+      attrPathForVersion = version:
+        let
+          parts = lib.versions.splitVersion version;
+          attribute = "erlangR${lib.elemAt parts 0}";
+        in [ "beam" "packages" attribute ];
+
+      packageSetAttrPaths = let
+        matches = name: builtins.match "erlangR[0-9]*" name != null;
+        names = lib.filter matches (lib.attrNames (pkgs.beam.packages or { }));
+        paths = map (name: [ "beam" "packages" name ]) names;
+        aliases = [ [ "beamPackages" ] ];
+      in aliases ++ paths;
+
+      callScopeAttr = "beamPackages";
+
+      deepOverride = set: overrides: set.extend (self: super: overrides);
+
+    };
+
+    pythonPackages = {
+
+      versionForPackageSet = set: set.python.version or null;
+
+      attrPathForVersion = version:
+        let
+          parts = lib.versions.splitVersion version;
+          attribute =
+            "python${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
+        in [ attribute ];
+
+      packageSetAttrPaths = let
+        matches = name: builtins.match "python[0-9]*Packages" name != null;
+        names = lib.filter matches (lib.attrNames pkgs);
+      in map lib.singleton names;
+
+      callScopeAttr = "pythonPackages";
+
+      deepOverride = set: overrides:
+        set.override (old: {
+          overrides =
+            lib.composeExtensions old.overrides (self: super: overrides);
+        });
+
+    };
+
+    perlPackages = {
+
+      versionForPackageSet = set: set.perl.version or null;
+
+      attrPathForVersion = version:
+        let
+          parts = lib.versions.splitVersion version;
+          attribute = "perl${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
+        in [ attribute ];
+
+      packageSetAttrPaths = let
+        matches = name: builtins.match "perl[0-9]*Packages" name != null;
+        names = lib.filter matches (lib.attrNames pkgs);
+      in map lib.singleton names;
+
+      callScopeAttr = "perlPackages";
+
+      deepOverride = set: overrides:
+        set.override
+        (old: { overrides = pkgs: old.overrides pkgs // overrides; });
+
+    };
   };
 
-  erlang = {
-
-    versionForPackageSet = set: set.erlang.version or null;
-
-    attrPathForVersion = version:
-      let
-        parts = lib.versions.splitVersion version;
-        attribute = "erlangR${lib.elemAt parts 0}";
-      in [ "beam" "packages" attribute ];
-
-    packageSetAttrPaths = let
-      matches = name: builtins.match "erlangR[0-9]*" name != null;
-      names = lib.filter matches (lib.attrNames (pkgs.beam.packages or { }));
-      paths = map (name: [ "beam" "packages" name ]) names;
-      aliases = [ [ "beamPackages" ] ];
-    in aliases ++ paths;
-
-    callScopeAttr = "beamPackages";
-
-    deepOverride = set: overrides: set.extend (self: super: overrides);
-
-  };
-
-  python = {
-
-    versionForPackageSet = set: set.python.version or null;
-
-    attrPathForVersion = version:
-      let
-        parts = lib.versions.splitVersion version;
-        attribute = "python${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
-      in [ attribute ];
-
-    packageSetAttrPaths = let
-      matches = name: builtins.match "python[0-9]*Packages" name != null;
-      names = lib.filter matches (lib.attrNames pkgs);
-    in map lib.singleton names;
-
-    callScopeAttr = "pythonPackages";
-
-    deepOverride = set: overrides:
-      set.override (old: {
-        overrides =
-          lib.composeExtensions old.overrides (self: super: overrides);
-      });
-
-  };
-
-  perl = {
-
-    versionForPackageSet = set: set.perl.version or null;
-
-    attrPathForVersion = version:
-      let
-        parts = lib.versions.splitVersion version;
-        attribute = "perl${lib.elemAt parts 0}${lib.elemAt parts 1}Packages";
-      in [ attribute ];
-
-    packageSetAttrPaths = let
-      matches = name: builtins.match "perl[0-9]*Packages" name != null;
-      names = lib.filter matches (lib.attrNames pkgs);
-    in map lib.singleton names;
-
-    callScopeAttr = "perlPackages";
-
-    deepOverride = set: overrides:
-      set.override
-      (old: { overrides = pkgs: old.overrides pkgs // overrides; });
-
-  };
-
+in {
+  inherit packageSets;
+  version = 1;
 }
