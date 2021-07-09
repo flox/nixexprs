@@ -1,0 +1,1 @@
+{ }: { result = "conflict-bar"; }

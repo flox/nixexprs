@@ -1,0 +1,1 @@
+{ conflict }: { result = "conflict-avoided"; }

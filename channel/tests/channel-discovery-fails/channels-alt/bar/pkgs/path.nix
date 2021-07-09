@@ -1,1 +1,0 @@
-{ }: { path = "channels-alt/bar"; }

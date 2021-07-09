@@ -1,4 +1,4 @@
-{ pkgs, nixpkgs, repo }:
+{ pkgs, nixpkgs, repo, nixpkgs-pregen }:
 let
   testRepo = pkgs.runCommandNoCC "repo" { } ''
     mkdir $out
@@ -21,6 +21,10 @@ in {
     {
       prefix = "";
       path = ./channels;
+    }
+    {
+      prefix = "nixpkgs-pregen";
+      path = nixpkgs-pregen;
     }
   ];
 }

@@ -1,0 +1,3 @@
+error: The package pkgs.package is being used. However there are multiple channels which provide that package. No conflict resolution is currently provided. Valid options are \[ "bar", "foo" \]. Set the conflict resolution for this package in .*/test/default.nix by copying one of the following lines to it:
+conflictResolution.pkgs.package = "bar";
+conflictResolution.pkgs.package = "foo";

@@ -1,0 +1,2 @@
+error: In the definition of the pkgs.testPackage package in .*/test/pkgs/testPackage.nix, the argument testPackage itself is being used, which points to the unoverridden version of the same package. However there are multiple channels which provide that package. The conflict resolution is currently set to florp, which is however not a valid option, because that channel doesn't exist. Valid options are \[ "other" \]. Set the conflict resolution for this package in .*/test/default.nix by copying one of the following lines to it:
+conflictResolution.pkgs.testPackage = "other";

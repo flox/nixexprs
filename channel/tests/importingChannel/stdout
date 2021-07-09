@@ -1,0 +1,1 @@
+{ rootPackage = { other = { rootPackage = { importingChannel = "test"; }; testPackage = { importingChannel = "root"; }; }; own = { testPackage = { importingChannel = "root"; }; }; }; testPackage = { importingChannel = "root"; }; }

@@ -1,13 +1,18 @@
 dir:
 let
 
-  repo = ../.;
+  repo = builtins.path {
+    name = "flox";
+    path = ../.;
+  };
 
   nixpkgs = fetchTarball {
     url =
       "https://github.com/NixOS/nixpkgs/archive/a52e974cff8fb80c427e0d55c01b3b8c770ccec4.tar.gz";
     sha256 = "0yhcnn435j9wfi1idxr57c990aihg0n8605566f2l8vfdrz7hl7d";
   };
+
+  nixpkgs-pregen = ./nixpkgs-pregen;
 
   pkgs = import nixpkgs {
     config = { };
@@ -19,6 +24,10 @@ let
     lib.concatMapStringsSep ":"
     ({ prefix, path }: if prefix == "" then path else prefix + "=" + path)
     entries;
+
+  callConfig = value:
+    lib.callPackageWith (pkgs // { inherit nixpkgs repo nixpkgs-pregen; }) value
+    { };
 
   /* - type (build | eval | eval-strict | eval-json, required): Type
      - exitCode (int, required): Expected exit code
@@ -32,7 +41,7 @@ let
     let
       configValue = import (path + "/config.nix");
       unchecked = if lib.isFunction configValue then
-        pkgs.callPackage configValue { inherit nixpkgs repo; }
+        callConfig configValue
       else
         configValue;
       checker = { type, exitCode, nixPath ? [ ], file ? path + "/expression.nix"

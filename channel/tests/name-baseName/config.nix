@@ -1,4 +1,4 @@
-{ nixpkgs, repo }: {
+{ nixpkgs, repo, nixpkgs-pregen }: {
   type = "eval";
   stringArgs.dir = "${./channels}/test";
   exitCode = 0;
@@ -10,6 +10,10 @@
     {
       prefix = "flox";
       path = repo;
+    }
+    {
+      prefix = "nixpkgs-pregen";
+      path = nixpkgs-pregen;
     }
   ];
 }
