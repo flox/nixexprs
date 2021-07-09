@@ -1,0 +1,3 @@
+error: In .*-file.nix, the argument "foo" has a default value (`foo ? <default>`) which is not allowed because the attribute "foo" exists in the environment, therefore overriding the default value.
+If "foo" should be a package configuration, changeable via `.override { foo = <value>; }`, rename the argument to something that doesn't already exist
+If "foo" should be optional dependency (commonly done with `foo ? null`), remove the default value

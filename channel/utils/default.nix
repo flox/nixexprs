@@ -3,4 +3,6 @@
   modifyPaths = (import ./modifyPaths.nix { inherit lib; }).modifyPaths;
   nestedListToAttrs =
     (import ./nestedListToAttrs.nix { inherit lib; }).nestedListToAttrs;
+  callPackageWith =
+    (import ./callPackageWith.nix { inherit lib; }).callPackageWith;
 }
