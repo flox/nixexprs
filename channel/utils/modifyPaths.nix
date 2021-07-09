@@ -69,7 +69,9 @@ in {
       {
         # Can override throwing attributes
         path = [ ];
-        mod = x: x;
+        mod = x: x // {
+          gnupg20 = "not throwing";
+        };
       }
       {
         path = [ "python37Packages" ];
