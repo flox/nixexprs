@@ -1,0 +1,6 @@
+trace: <baz:0> [name=baz] [number=0] [empty-context=] Previous prefix [name=baz] [number=0] and value is { baz = 0; }
+trace: <baz:1> [name=baz] [number=1] [empty-context=] Previous prefix [name=baz] [number=1] and value is { baz = 1; }
+trace: <foo:0> [name=foo] [number=0] [empty-context=] Previous prefix [name=foo] [number=0] and value is { foo = 0; }
+trace: <foo:1> [name=foo] [number=1] [empty-context=] Previous prefix [name=foo] [number=1] and value is { foo = 1; }
+trace: <foo:2> [name=foo] [number=2] [empty-context=] Previous prefix [name=foo] [number=2] and value is { foo = 2; }
+trace: <bar:0> [name=bar] [number=0] [empty-context=] Previous prefix [name=bar] [number=0] and value is { bar = 0; }
