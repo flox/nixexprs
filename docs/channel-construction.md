@@ -1,16 +1,33 @@
 # Channel construction
 
-Each channel needs to have a `default.nix` in its root that calls the `<flox/channel>` function to construct a channel, which allows the user to run `nix-build` to build outputs, Hydra to find all outputs, and other channels to use this channel as a dependency. The entrypoint of this function is in [`flox/channel/default.nix`](../channel/default.nix). It takes a set of arguments intended to be passed via a channels `default.nix` file. These are:
+Each channel needs to have a `default.nix` in its root that calls the `<flox/channel>` function to construct a channel, which allows the user to run `nix-build` to build outputs, Hydra to find all outputs, and other channels to use this channel as a dependency. The entrypoint of this function is in [`flox/channel/default.nix`](../channel/default.nix).
 
-- `name` (string, default inferred): The name of the channel. If not specified, the name is inferred from a number of heuristics.
-- `topdir` (path, required): The path to the channel root. Usually just `./.`, indicating that the channel lives in the same directory as the file importing `<flox/channel>`. This directory is used to determine all outputs of the channel. See below section for details.
-- `extraOverlays` (list of nixpkgs overlays, default `[]`): Extra [nixpkgs overlays](https://nixos.org/manual/nixpkgs/stable/#sec-overlays-definition) to apply to the channel and its dependent channels.
+## Channel file arguments
 
-The result of this function call is _another_ function, with arguments that all have default values. This allows evaluation of the channels `default.nix` via `nix-build -A`, but also allows customizing the arguments if necessary. This function has these arguments:
+A call to `<flox/channel>` in a channels root `default.nix` file usually looks like
+```nix
+import <flox/channel> {
+  topdir = ./.;
+}
+```
 
-- `name` (string, default inferred): Another way to pass the name of the channel. If not specified, the name is inferred from a number of heuristics. If `name` is passed in the previous function call, that takes precedence over this one.
-- `debugVerbosity` (integer, default 0): The level of debug information to display during evaluation. A value of 10 should display everything, while 0 should display nothing. Very useful for debugging infinite recursion errors. See [`withVerbosity`](#withverbosity-verbosity-fun-arg) for more details.
-- `sourceOverrideJson` (JSON string, default `{}`): A JSON string for specifying source overrides of projects.
+Available arguments are:
+- `name` (string, default inferred): The name of the channel. If not specified, the name is inferred automatically if possible.
+- `topdir` (path, required): The path to the channel root, which should be the directory of the `default.nix` itself, so `./.`. This directory is used to determine all outputs of the channel. See the [subdirectories](#topdir-subdirectories) section for details.
+- `conflictResolution` (attribute set, default `{}`): How package conflicts for this channel should be resolved. See the [package conflict document](./conflicts.md) for how this is used.
+
+## CLI arguments
+
+The result of the above function call is _another_ function, but with all arguments defaulted. This allows building of packages with `nix-build -A <package>`, but also allows overriding the defaults with `--arg`/`--argstr`, such as
+```
+$ nix-build -A myPackage --arg debugVerbosity 4
+```
+
+Available arguments are:
+- `name` (string, default inferred): Another way to pass the name of the channel. If not specified, the name is inferred automatically if possible. If `name` is passed in the channel file arguments, that takes precedence over this one.
+- `debugVerbosity` (integer, default 0): The level of debug information to display during evaluation. See [the trace configuration docs](./debugging.md#configuring-tracing) for more details.
+- `subsystemVerbosities` (attribute set of integers, default `{}`): Custom trace verbosities for specific subsystems. See [the trace configuration docs](./debugging.md#configuring-tracing) for more details.
+- `sourceOverrideJson` (JSON string, default `{}`): A JSON string for specifying source overrides of projects. This allows changing the source of packages temporarily without having to rely on the auto-updating mechanism. Used by `flox build`
   This is of the form
   ```json
   {
@@ -19,14 +36,15 @@ The result of this function call is _another_ function, with arguments that all 
     }
   }
   ```
-- `_return` (internal, unstable): Internal return value of the channel creation. Used to implement dependencies on other channels
-- `_isFloxChannel` (internal, unstable): Unused argument that hints that this is a Flox channel. This is used to discover Flox channels from `NIX_PATH`
+- Any extra arguments are passed through to the underlying nixpkgs, the most useful ones being
+  - `system` (string, default from `builtins.currentSystem`): The system the channel should be built for, e.g. `x86_64-linux`, `aarch64-linux` or `x86_64-darwin`
+  - `config` (attribute set, default `{}`): The nixpkgs config, can be used to pass e.g. `allowUnfree = true` or `permittedInsecurePackages = [ "openssl-1.0.2u" ]`. See [the nixpkgs docs](https://nixos.org/manual/nixpkgs/stable/#chap-packageconfig) for more information.
 
 The result of this function call are the channel outputs, as determined by mainly `topdir`. See below section for details.
 
 ## `topdir` subdirectories
 
-The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. Other than `pkgs`, all these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). See [here](./package-sets.md) for more information on package sets. For each subdirectory, every file and directory within it specifies a package with the same name. E.g. `pythonPackages/myPkg/default.nix` defines the `myPkg` python package, accessible via the `pythonPackages.myPkg` attribute (among others). The following table specifies the properties of each supported subdirectory.
+The channel creation mechanism looks at a number of subdirectories of `topdir` to generate channel outputs from. All these subdirectories are determined by [`package-sets.nix`](../channel/package-sets.nix). See [here](./package-sets.md) for more information on package sets. For each subdirectory, every file and directory within it specifies a package with the same name. E.g. `pythonPackages/myPkg/default.nix` defines the `myPkg` python package, accessible via the `pythonPackages.myPkg` attribute (among others). The following table specifies the properties of each supported subdirectory.
 
 | Package set | Call scope attribute | Paths | Output attribute paths |
 | --- | --- | --- | --- |
@@ -38,31 +56,31 @@ The channel creation mechanism looks at a number of subdirectories of `topdir` t
 
 ### Shallow vs deep overriding
 
-Packages declared with these files override/replace packages from nixpkgs for the current channel. There's different ways in how packages are overridden:
+Packages declared with these files override/replace packages from nixpkgs for the current channel. But there's different ways in how packages are overridden:
 
-- Shallow overriding: Only immediate dependencies of your channel are replaced, not transitive dependencies. This is the default.
-- Deep overriding: Replaces dependencies transitively in all dependencies, including other channels. This can be enabled by creating an empty file in `<set>/<name>/deep-override`
+- Shallow overriding (default): Can be used to define arbitrary package attributes, but if a nixpkgs package is overridden, the new version won't be used by reverse dependencies in nixpkgs. This allows reusing the precompiled atrifacts from the NixOS cache, but can cause version conflicts when both the nixpkgs version and the overridden flox version is used.
+- Deep overriding (when empty `<set>/<name>/deep-override` file exists): Restricted to only package attributes that exist in nixpkgs already, but makes reverse dependencies in nixpkgs also use the overridden version. This allows easily resolving package conflicts that could occur if both the nixpkgs and overridden flox version is used. However, this also requires other channels that depend on your channel to give permission to override a nixpkgs, as it causes changes to all channels packages that include yours.
 
-Shallow overriding allows using mostly precompiled dependencies, while deep overriding could rebuild many layers of dependencies, so shallow overriding is cheaper to build. Deep overriding however resolves version conflicts caused by multiple versions of the same dependency in a closure.
-
-Check out [this document](expl/deep-overrides.md) to learn more about how deep overriding works under the hood.
+Here is a comparison table between the two
 
 | Type | Shallow | Deep |
 | --- | --- | --- |
 | To enable | (enabled by default) | Create `<set>/<name>/deep-override` |
-| Cheap to build | Yes | No |
-| Free of package conflicts | No | Yes |
+| Can use nixpkgs binary caches | Yes | No |
+| Generally free of package conflicts | No | Yes |
+| Can define non-nixpkgs attributes | Yes | No |
+| Requires permission when another channel depends on yours | No | Yes |
+
+In general, shallow overrides should be preferred, but deep overrides can be used if needed.
 
 ## Call scope
 
 All paths in `*/<name>/default.nix` and `*/<name>.nix` are auto-called with a scope containing these attributes in increasing priority:
-- All attributes of nixpkgs and its `xorg` set, so `pkgs.*` and `pkgs.xorg.*`
-- All of this channels output attributes, merged into the above set
+- All nixpkgs attributes
+- All attributes from all transitive channels
+- All attributes from this channel
+- `<name>`: The package in nixpkgs of the same name as the one defined. This allows package overriding without getting infinite recursion. See [override conflicts](./conflicts.md#override-conflicts) for more info.
 - `meta`: An attribute set containing some utility functions. See [meta set](#meta-set) for more info.
-- `channels`: An attribute set containing the outputs of all other available channels:
-  - `channels.<channel>.<output>`: Output attribute `<output>` of channel `<channel>`
-- `flox`: A convenience alias to `channels.flox` for accessing the Flox channels outputs
-- `<name>`: The package in nixpkgs of the same name as the one defined. This allows package overriding without getting infinite recursion
 - `callPackage`: A function like `pkgs.callPackage` but with the very scope described here (except `<name>`). This allows autocalling further files.
 
 In addition, for all package sets in [above table](#subdirectories) that have a call scope attribute `<attr>`, the following version-agnostic attributes are in scope as well. See [package sets](package-sets.md) for more info.
@@ -70,9 +88,6 @@ In addition, for all package sets in [above table](#subdirectories) that have a 
   - The packages in nixpkgs
   - This channels packages
 - All attributes of the above set
-- `channels`: An attribute set containing the outputs of all other available channels:
-  - `channels.<channel>.<output>`: Output attribute `<output>` of channel `<channel>`
-  - `channels.<channel>.<attr>`: A version-agnostic package set for that channel
 
 ### Meta set
 
@@ -90,11 +105,12 @@ The project/repository to get the source for.
 
 ##### Argument `<overrides>` (attribute set)
 
-- `rev` (string, default `"master"`): A Git hash or branch to use for the source, only used if `src` is unset
-- `src` (string, default from GitHub): The path to the source, overrides the one from GitHu
-- `version` (string, default from GitHub if no `src` passed, otherwise required): The version string to use for the source
+- `src` (string, default from GitHub): The path to the source, overrides the automatically updated source
+- `rev` (string, default `"master"`): A Git hash or branch to use for the source when it is automatically updated
+- `name` (string, default `${pname}-${version}`): The name of the derivation
 - `pname` (string, default project name): The package name
-- `versionSuffix` (string, default `""`): Additional suffix to append to the resulting version. Should be increased over time
+- `version` (string, default from GitHub if no `src` passed, otherwise required): The version string to use for the source
+- `versionSuffix` (string, default when automatically updated `"r-${releaseNumber}"`): Additional suffix to append to the resulting version. Should be increased over time
 - `extraInfo` (attribute set, default `{}`): Arbitrary additional info about the source, will be passed to the resulting `infoJson`
 
 ##### Returns
@@ -122,37 +138,15 @@ The channel from which this channel is accessed. In case this channel is accesse
 
 Like [`getChannelSource`](#getChannelSource-channel-project-overrides), but with [`ownChannel`](#ownChannel) passed as the `<channel>` argument.
 
-#### `scope`
+#### `trace <subsystem> <verbosity> <message> <arg>`
 
-The scope with which the current package has been auto-called, useful if the scope needs to be extended.
+Traces `<message>` if the verbosity of `<subsystem>` is equal or higher than `<verbosity>`, as configured with the `debugVerbosity` and `subsystemVerbosity` CLI arguments.
 
-#### `withVerbosity <verbosity> <fun> <arg>`
-
-Applies `<fun>` to `<arg>` only if the configured `debugVerbosity` is equal or higher than `<verbosity>`. With `<fun>` doing tracing, this allows controlling the verbosity level of the traced value. Example: `withVerbosity 5 (builtins.trace "Some message") 1`
-
-##### Argument `<verbosity>` (integer)
-
-The minimum verbosity level to trigger for. The verbosity levels are roughly meant for:
-- 0: The default level, should only be used for warnings, so that normal evaluation doesn't trigger it
-- 1-3: For debug messages that are infrequent, such that if the user sets `debugVerbosity` to one of these, only a handful of messages are printed
-- 4-7: For debug messages that are somewhat more frequent
-- 8-10: For debug messages that are very frequent, these can really litter the output
-
-##### Argument `<fun>` (function)
-
-The function to call on `<arg>` if `debugVerbosity` is above or equal to the passed `<verbosity>`. For static debug messages this is usually `builtins.trace "some static message"`. Messages can also depend on the `<arg>` to do more complicated outputs like `arg: builtins.trace "Argument is ${arg}" arg`.
-
-##### Argument `<arg>` (anything)
-
-The argument to pass to `<fun>` if `debugVerbosity` is above or equal to the passed `<verbosity>`. Otherwise this is the return value of the function.
-
-##### Returns
-- If `debugVerbosity` is greater or equal than `<verbosity>`, returns `<arg>` applied to `<fun>`
-- Otherwise returns `<arg>`
+See [the debugging document](./debugging.md#trace-function) for more details.
 
 #### `mapDirectory <directory> { call? }`
 
-Imports all Nix files and subdirectories of `<directory>`, importing them and turning them into Nix values by auto-calling them with [`scope`](#scope). This allows declaring local ad-hoc package sets. For example, with `pkgs/myPackages.nix` containing
+Imports all Nix files and subdirectories of `<directory>`, importing them and turning them into Nix values by auto-calling them. This allows declaring local ad-hoc package sets. For example, with `pkgs/myPackages.nix` containing
 
 ```nix
 { meta }: meta.mapDirectory ../myPackages {}
@@ -182,9 +176,9 @@ An experimental convenience function for deferring a package definition to a Nix
 - `path` (string, mandatory): The relative Nix file path within `<project>` to use for defining this package. If this is a directory, its `default.nix` file will be used. This file is then treated as if it stood in for the `importNix` definition, getting access to the [same call scope](./channel-construction.md#call-scope).
 - `project` (string, mandatory): The name of the GitHub repository in your organization to use for getting the Nix file source of this package. This is passed as the [`<project>` argument](./channel-construction.md#argument-project-string) to `meta.getChannelSource`.
 - `channel` (string, optional, default [`meta.importingChannel`](./channel-construction.md#importingchannel)): The name of the channel, aka GitHub user/organization to get the `<project>` from. Defaults to the channel that uses/imports this builder. This is passed as the [`<channel>` argument](./channel-construction.md#argument-channel-string) to `meta.getChannelSource`.
-- All other arguments are passed as the [`<overrides>` argument](./channel-construction.md#argument-overrides-string) to `meta.getChannelSource`. See [its documentation](channel-construction.md#getchannelsource-channel-project-overrides) for how the source can be influenced with this.
+- All other arguments are passed as the [`<overrides>` argument](./channel-construction.md#argument-overrides-attribute-set) to `meta.getChannelSource`. See [its documentation](channel-construction.md#getchannelsource-channel-project-overrides) for how the source can be influenced with this.
 
 ##### Returns
 The result of the Nix file specified in the arguments, as if that file were in this ones place.
 
-Assuming it uses a flox builder, it also contains the [common return attributes](#common-return-attributes).
+Assuming it uses a flox builder, it also contains the [common return attributes](./builders.md#common-return-attributes).
