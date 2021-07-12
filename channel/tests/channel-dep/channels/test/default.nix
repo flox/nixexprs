@@ -1,4 +1,1 @@
-import <flox/channel> {
-  topdir = ./.;
-  dependencies = [ "other" ];
-}
+import <flox/channel> { topdir = ./.; }
