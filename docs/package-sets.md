@@ -8,25 +8,25 @@ See [package-sets.nix](../channel/package-sets.nix) to see how package sets are 
 
 ## Version-agnostic references
 
-Each package set has a call scope attribute `<attr>` as described in [here](channel-construction.md#topdir-subdirectories). As listed [here](channel-construction.md#call-scope), this `<attr>` gives access to version-agnostic package sets of nixpkgs, the current channel, and other channels. This notably only works within declarations of that package set.
+Each package set has a call scope attribute `<attr>` (other than the special `pkgs` package set), e.g. for python it's `pythonPackages`, as described in [here](channel-construction.md#topdir-subdirectories). As listed [here](channel-construction.md#call-scope), this `<attr>` gives access to version-agnostic package sets of nixpkgs, the current channel, and other channels all in one. But note that this only works within declarations of that package set. In addition, all the attributes of `<attr>` itself are available in the scope directly.
 
 ### Example
-As an example, the following file in `pythonPackages/myPkg/default.nix` defines a version-agnostic Python package using the Python package builder from the flox package, which depends on nixpkgs `pythonPackages.appdirs`, a dependency from this channel in `pythonPackages/myDep/default.nix`, and a dependency from another channel:
+As an example, the following file in `pythonPackages/myPkg/default.nix` defines a version-agnostic Python package using the Python package builder from the flox package, which depends on nixpkgs `pythonPackages.appdirs`, a dependency from this channel in `pythonPackages/myDep/default.nix`, and a dependency from another channel in `pythonPackages/otherDep/default.nix`:
 ```nix
-{ appdirs, myDep, channels, flox }:
-flox.pythonPackages.buildPythonPackage {
+{ buildPythonPackage, appdirs, myDep, otherDep }:
+buildPythonPackage {
   project = "myPkg";
   propagatedBuildInputs = [
     appdirs
     myDep
-    channels.other.pythonPackages.otherPkg
+    otherDep
   ];
 }
 ```
 
-The `pythonPackages` attribute used in the `./pythonPackages` subdirectory essentially means "The Python packages of whichever version this result is used for".
+All the attributes in the argument list come from `pythonPackages`, which contains the correct python versions of dependencies for whatever version the result is used for.
 
-Whereas outside of `./pythonPackages`, the same attribute means "The Python packages of the default Python version (currently 2.x)"
+In comparison, outside of `./pythonPackages`, the `pythonPackages` attribute points to the Python packages of the default Python version (currently 2.x).
 
 ## Outputs
 

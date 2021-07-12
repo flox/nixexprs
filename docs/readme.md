@@ -1,10 +1,12 @@
 # Flox channel docs
 
-## Reference
-
-The flox channel has two main uses:
-- Calling `<flox/channel>` in the `default.nix` of each channel to allow it to be evaluated to the outputs it defines. See [here](channel-construction.md) for reference documentation on this.
-- Defining the outputs of the flox channel itself, such as builders like `flox.mkDerivation` and others. See [here](flox-channel.md) for reference documentation on this.
+The following pages exist:
+- [Channel construction](./channel-construction.md): Reference for the `<flox/channel>` entrypoint used to declare flox channels
+- [Flox builders](./builders.md): Reference to the flox builders, supporting the `project` argument for automatic source updates
+- [Flox channel outputs](./flox-channel.md): Reference to non-builder attributes that the flox channel provides
+- [Package conflicts](./conflicts.md): Tutorial of how package conflicts can be resolved and why they occur
+- [Debugging](./debugging.md): Reference on the `trace` function and How-To for debugging flox channel evaluations
+- [Package sets](./package-sets.md): Explanation of package sets for flox channels
 
 ## Explanation
 
