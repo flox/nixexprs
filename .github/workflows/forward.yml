@@ -1,0 +1,40 @@
+name: Forward branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Branch to forward'
+        default: 'master'
+        required: true
+
+jobs:
+  forward:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Forward branch
+      run: |
+        # Simple script using the GitHub API to fast-forward a branch
+        set -euo pipefail
+
+        target=${{ github.event.inputs.target }}
+        output=$(mktemp)
+        data=$(jq --arg sha "$GITHUB_SHA" -n '{ sha: $sha, force: false }')
+
+        if ! code=$(curl -sS --output "$output" --write-out %{http_code} \
+          -X PATCH "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/refs/heads/$target" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: token ${{ github.token }}" \
+          -d "$data"); then
+          echo "Curl call to forward branch $target to $GITHUB_SHA failed"
+          exit 1
+        fi
+
+        if [[ "$code" != 200 ]]; then
+          echo "Curl call returned $code HTTP code, output is"
+          cat "$output"
+          exit 1
+        fi
+
+        echo "Successfully updated branch $target to $GITHUB_SHA"
