@@ -4,9 +4,9 @@
 let
 
   options = channels // {
-    nixpkgs = if channels ? nixpkgs.valid && channels ? flox.valid then {
+    nixpkgs = if channels ? nixpkgs.valid && channels ? flox-lib.valid then {
       invalid = "nixpkgs can't be selected for packages also provided by "
-        + "the flox channel, since it provides a standard and "
+        + "the flox-lib channel, since it provides a standard and "
         + "essential superset of nixpkgs functionality";
     } else
       channels.nixpkgs;

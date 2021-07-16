@@ -7,7 +7,7 @@
       path = nixpkgs;
     }
     {
-      prefix = "flox";
+      prefix = "flox-lib";
       path = repo;
     }
     {

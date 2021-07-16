@@ -1,6 +1,6 @@
 let
   lib = import <nixpkgs/lib>;
-  utils = import <flox/channel/utils> { inherit lib; };
+  utils = import <flox-lib/channel/utils> { inherit lib; };
 
   result = utils.nestedListToAttrs (utils.traceWith { }) [
     {

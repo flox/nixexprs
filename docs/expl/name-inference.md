@@ -1,15 +1,15 @@
 # Channel Name Inference Motivation and Complexities
 
-An evaluation of `<flox/channel>` for [constructing a flox channel](../channel-construction.md) makes a big effort to infer the channel name that's being evaluated. A channel might be evaluated with `nix-build '<myChan>' -A foo`, where `<myChan/default.nix>` contains the expression
+An evaluation of `<flox-lib/channel>` for [constructing a flox channel](../channel-construction.md) makes a big effort to infer the channel name that's being evaluated. A channel might be evaluated with `nix-build '<myChan>' -A foo`, where `<myChan/default.nix>` contains the expression
 ```nix
-import <flox/channel> {
+import <flox-lib/channel> {
   topdir = ./.;
 }
 ```
 
 It is possible to specify the name explicitly with
 ```nix
-import <flox/channel> {
+import <flox-lib/channel> {
   name = "myChan";
   topdir = ./.;
 }
@@ -41,7 +41,7 @@ By knowing that the channel we're evaluating is `A`, we can override the path fo
 
 ## Why it's so complicated
 
-Channel name inference is not trivial however: The only information that the `<flox/channel>` function gets is the `topdir` value. Since there's a variety of ways in which the channel can be evaluated, a number of heuristics are used to try to infer the name:
+Channel name inference is not trivial however: The only information that the `<flox-lib/channel>` function gets is the `topdir` value. Since there's a variety of ways in which the channel can be evaluated, a number of heuristics are used to try to infer the name:
 - By looking at the base name of the topdir: This is the easiest way to infer the name in cases where the directory name is the same as the channel. This won't trigger when the base name is just "floxpkgs" however, which is the standard name git would name it when cloning.
 - By looking at the git remotes in the git config: In case the floxpkgs repository is a git checkout, this is very reliable
 

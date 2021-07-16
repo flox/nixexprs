@@ -1,12 +1,12 @@
 # Channel construction
 
-Each channel needs to have a `default.nix` in its root that calls the `<flox/channel>` function to construct a channel, which allows the user to run `nix-build` to build outputs, Hydra to find all outputs, and other channels to use this channel as a dependency. The entrypoint of this function is in [`flox/channel/default.nix`](../channel/default.nix).
+Each channel needs to have a `default.nix` in its root that calls the `<flox-lib/channel>` function to construct a channel, which allows the user to run `nix-build` to build outputs, Hydra to find all outputs, and other channels to use this channel as a dependency. The entrypoint of this function is in [`flox-lib/channel/default.nix`](../channel/default.nix).
 
 ## Channel file arguments
 
-A call to `<flox/channel>` in a channels root `default.nix` file usually looks like
+A call to `<flox-lib/channel>` in a channels root `default.nix` file usually looks like
 ```nix
-import <flox/channel> {
+import <flox-lib/channel> {
   topdir = ./.;
 }
 ```

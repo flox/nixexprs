@@ -22,7 +22,7 @@ pythonPackages.buildPythonApplication {
 }
 ```
 
-In addition to the entries specified in `channels.json`, every channel also implicitly depends on `nixpkgs` and the `flox` channel, which is why we have access to `pythonPackages.buildPythonApplication` (supporting the `project` argument) from the `flox` channel, and `lib` from `nixpkgs`.
+In addition to the entries specified in `channels.json`, every channel also implicitly depends on `nixpkgs` and the `flox-lib` channel, which is why we have access to `pythonPackages.buildPythonApplication` (supporting the `project` argument) from the `flox-lib` channel, and `lib` from `nixpkgs`.
 
 However, what happens if there are multiple channels that define the same package? E.g. if we also depend on a channel `channel2`, which also provides a `<channel2>/pkgs/otherPackage/default.nix`, where should `otherPackage` come from?
 
@@ -37,7 +37,7 @@ Set the conflict resolution for this package in <root>/default.nix by copying on
 
 We can now choose where `otherPackage` should come from by following these instructions. E.g. if we want the package from `channel2`, we'd change `<root>/default.nix` to look like
 ```nix
-import <flox/channel> {
+import <flox-lib/channel> {
   topdir = ./.;
   conflictResolution.pkgs.otherPackage = "channel2";
 }
@@ -47,18 +47,18 @@ Since all channels share the same scope of packages, this conflict resolution me
 
 From the above example, we saw that package conflict resolution is only necessary if more than one channel defines a package. However there are some exceptions in which conflicts can safely be resolved automatically even with multiple channels providing them:
 - If the `root` channel (the channel we're evaluating from) specifies a package, that takes precedence over any other channels
-- If only the `flox` and `nixpkgs` channel provide a package, conflict resolution chooses `flox` automatically, because all the packages it defines are essentially just an extension of the equivalent nixpkgs builders
+- If only the `flox-lib` and `nixpkgs` channel provide a package, conflict resolution chooses `flox-lib` automatically, because all the packages it defines are essentially just an extension of the equivalent nixpkgs builders
 
 Here is a list of examples of when conflict resolution is or is not necessary. A `o` indicates that a specific channel provides the given package, and a `(o)` indicates that the package from that channel was chosen
 
-| packages \ channels | nixpkgs | flox | root | channel1 | channel2 | package comes from | reason |
+| packages \ channels | nixpkgs | flox-lib | root | channel1 | channel2 | package comes from | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | A | (o) | | | | | nixpkgs | Only exists in nixpkgs |
-| B | o | (o) | | | | flox | Flox safely overrides nixpkgs |
+| B | o | (o) | | | | flox-lib | flox-lib safely overrides nixpkgs |
 | C | o | o | (o) | o | | root | Root channel always takes precedence |
 | D | | | | (o) | | channel1 | Only exists in one channel |
 | F | o | | | o | | (conflict!) | Provided by both nixpkgs and a channel |
-| E | | o | | o | | (conflict!) | Provided by both flox and another channel |
+| E | | o | | o | | (conflict!) | Provided by both flox-lib and another channel |
 | G | | | | o | o | (conflict!) | Provided by multiple channels |
 
 In the `root` channel, you can manually ask for where a package comes from. For above example with `pkgs/otherPackage` this can be done with
@@ -124,10 +124,10 @@ Set the conflict resolution for this package in <channel2>/default.nix by copyin
 
 As you might expect, this is handled by requiring a manual conflict resolution again. This time however, it is _not_ the root channel which needs to specify the resolution, but rather the channel that doesn't know which version of `otherPackage` to override, `channel2` here. Following the instructions of the error message, we can specify that `channel2`'s `otherPackage` overrides the one from `channel1` by changing `<channel2>/default.nix` to
 ```nix
-import <flox/channel> {
+import <flox-lib/channel> {
   topdir = ./.;
   conflictResolution.pkgs.otherPackage = "channel1";
 }
 ```
 
-The rules for automatic resolution of override conflicts are the same as the ones for dependency conflicts in the previous section, however only the _direct_ dependencies of the channel are available as options (which includes `nixpkgs` and `flox`, but excludes the channel itself).
+The rules for automatic resolution of override conflicts are the same as the ones for dependency conflicts in the previous section, however only the _direct_ dependencies of the channel are available as options (which includes `nixpkgs` and `flox-lib`, but excludes the channel itself).

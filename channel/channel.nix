@@ -99,7 +99,7 @@ let
                 channels =
                   lib.mapAttrs (name: withWarningPrefix [ "channels" name ])
                   channelAttrs;
-                flox = withWarningPrefix [ "flox" ] channelAttrs.flox;
+                flox = withWarningPrefix [ "flox" ] channelAttrs.flox-lib;
                 floxPath = spec.path;
                 baseScope = baseScope';
                 superScope.${pname} = superPackage;

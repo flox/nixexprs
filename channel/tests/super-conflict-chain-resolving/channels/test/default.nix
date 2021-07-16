@@ -1,4 +1,4 @@
-import <flox/channel> {
+import <flox-lib/channel> {
   topdir = ./.;
   conflictResolution.pkgs.testPackage = "foo";
 }
