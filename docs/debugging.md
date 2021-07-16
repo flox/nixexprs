@@ -67,15 +67,15 @@ Tracing can be configured by setting a default minimum verbosity with the `--arg
 $ nix-build -A testPackage --arg debugVerbosity 9
 trace: <closure:1> Determining channel closure
 trace: <name:2> Determined root channel name to be root with heuristic baseName
-trace: <closure:2> Channel root depends on flox
-trace: <pregen:1> Reusing pregenerated /home/infinisil/j/tweag/clients/deshaw/flox/channels/nixpkgs-pregen/package-sets.json
+trace: <closure:2> Channel root depends on flox-lib
+trace: <pregen:1> Reusing pregenerated /home/infinisil/nixpkgs-pregen/package-sets.json
 trace: <dirToAttrs:5> [dir=root/beamPackages] Not importing any attributes because the directory doesn't exist
 trace: <dirToAttrs:5> [dir=root/haskellPackages] Not importing any attributes because the directory doesn't exist
 trace: <dirToAttrs:5> [dir=root/perlPackages] Not importing any attributes because the directory doesn't exist
 trace: <dirToAttrs:4> [dir=root/pkgs] Importing these attributes from directory: other, testPackage
 trace: <dirToAttrs:5> [dir=root/pythonPackages] Not importing any attributes because the directory doesn't exist
 trace: <nestedListToAttrs:9> [importingChannel=root] [channel=root] Called with index 0 and list paths [ [ ] ]
-trace: <callPackageWith:6> [importingChannel=root] [channel=root] [packageSet=pkgs] [version=none] [package=testPackage] Calling file /home/infinisil/j/tweag/clients/deshaw/flox/channels/root/pkgs/testPackage.nix
+trace: <callPackageWith:6> [importingChannel=root] [channel=root] [packageSet=pkgs] [version=none] [package=testPackage] Calling file /home/infinisil/.cache/floxpkgs/root/pkgs/testPackage.nix
 trace: <dirToAttrs:4> [dir=flox/pkgs] Importing these attributes from directory: buildGoModule, buildGoPackage, buildRustPackage, linkDotfiles, mkDerivation, naersk, removePathDups
 trace: <pathsToModify:2> [importingChannel=root] [pathsToModifyType=shallow] [packageSet=pkgs] [version=none] Injecting attributes into path [ ]: [ "buildGoModule" "buildGoPackage" "buildRustPackage" "linkDotfiles" "mkDerivation" "naersk" "other" "removePathDups" "testPackage" ]
 /nix/store/apbhxds141wrib2yg53zg1njkryhfk0b-test
@@ -89,10 +89,10 @@ In addition to setting a default verbosity, it's possible to override the verbos
 $ nix-build -A testPackage --arg debugVerbosity 9 --arg subsystemVerbosities '{ dirToAttrs = 0; }'
 trace: <closure:1> Determining channel closure
 trace: <name:2> Determined root channel name to be root with heuristic baseName
-trace: <closure:2> Channel root depends on flox
-trace: <pregen:1> Reusing pregenerated /home/infinisil/j/tweag/clients/deshaw/flox/channels/nixpkgs-pregen/package-sets.json
+trace: <closure:2> Channel root depends on flox-lib
+trace: <pregen:1> Reusing pregenerated /home/infinisil/nixpkgs-pregen/package-sets.json
 trace: <nestedListToAttrs:9> [importingChannel=root] [channel=root] Called with index 0 and list paths [ [ ] ]
-trace: <callPackageWith:6> [importingChannel=root] [channel=root] [packageSet=pkgs] [version=none] [package=testPackage] Calling file /home/infinisil/j/tweag/clients/deshaw/flox/channels/root/pkgs/testPackage.nix
+trace: <callPackageWith:6> [importingChannel=root] [channel=root] [packageSet=pkgs] [version=none] [package=testPackage] Calling file /home/infinisil/.cache/floxpkgs/root/pkgs/testPackage.nix
 trace: <pathsToModify:2> [importingChannel=root] [pathsToModifyType=shallow] [packageSet=pkgs] [version=none] Injecting attributes into path [ ]: [ "buildGoModule" "buildGoPackage" "buildRustPackage" "linkDotfiles" "mkDerivation" "naersk" "other" "removePathDups" "testPackage" ]
 /nix/store/apbhxds141wrib2yg53zg1njkryhfk0b-test
 ```

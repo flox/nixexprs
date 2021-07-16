@@ -2,7 +2,7 @@ dir:
 let
 
   repo = builtins.path {
-    name = "flox";
+    name = "flox-lib";
     path = ../.;
   };
 

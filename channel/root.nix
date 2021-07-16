@@ -90,7 +90,7 @@ let
     sanitizeResult = name: result:
       result // {
         dependencies =
-          removeAttrs (result.dependencies // { flox = null; }) [ name ];
+          removeAttrs (result.dependencies // { flox-lib = null; }) [ name ];
       };
 
     root = {

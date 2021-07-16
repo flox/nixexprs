@@ -14,10 +14,10 @@ let
 
     argDeps = firstArgs.dependencies or [ ];
 
-    # We need to be able to handle flox, nixpkgs and own channel entries here
-    # even if provided by another flox channel provider
+    # We need to be able to handle flox-lib, nixpkgs and own channel entries here
+    # even if provided by another flox-lib channel provider
     # Also we want nixpkgs to be in the list for determining the extends
-    allDeps = fileDeps ++ argDeps ++ [ "flox" "nixpkgs" channelName ];
+    allDeps = fileDeps ++ argDeps ++ [ "flox-lib" "nixpkgs" channelName ];
 
   in lib.genAttrs allDeps (x: null);
 

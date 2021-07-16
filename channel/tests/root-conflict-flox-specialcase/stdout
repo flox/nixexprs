@@ -1,1 +1,1 @@
-".*-flox/pkgs/buildGoModule.nix"
+".*-flox-lib/pkgs/buildGoModule.nix"
